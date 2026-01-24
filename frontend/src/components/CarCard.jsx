@@ -1,31 +1,38 @@
 import React, { useState } from "react";
+
 export default function CarCard({ car }) {
   return (
-    <div style={styles.card}>
-      <h3 style={styles.title}>
+    <div
+      style={{
+        background: "var(--card)",
+        borderRadius: 16,
+        padding: "1.5rem",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+        transition: "transform .2s ease"
+      }}
+    >
+      <h3 style={{ marginBottom: ".25rem" }}>
         {car.year} {car.make} {car.model}
       </h3>
-      <p><strong>Engine:</strong> {car.engine}</p>
-      <p><strong>Fuel:</strong> {car.fuel_type}</p>
-      <p><strong>Age:</strong> {car.age} years</p>
-      <p style={styles.vin}>{car.vin}</p>
+
+      <p style={{ color: "var(--muted)", fontSize: ".9rem" }}>
+        {car.engine} • {car.fuel_type}
+      </p>
+
+      <div style={{ marginTop: "1rem", fontSize: ".9rem" }}>
+        <strong>Age:</strong> {car.age} years
+      </div>
+
+      <div
+        style={{
+          marginTop: "1.25rem",
+          fontSize: ".75rem",
+          color: "var(--muted)",
+          letterSpacing: ".04em"
+        }}
+      >
+        VIN {car.vin}
+      </div>
     </div>
   );
 }
-
-const styles = {
-  card: {
-    background: "white",
-    borderRadius: "12px",
-    padding: "1.5rem",
-    boxShadow: "0 10px 20px rgba(0,0,0,0.08)"
-  },
-  title: {
-    marginBottom: "0.5rem"
-  },
-  vin: {
-    marginTop: "1rem",
-    fontSize: "0.75rem",
-    color: "#777"
-  }
-};

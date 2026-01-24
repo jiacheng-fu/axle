@@ -1,0 +1,29 @@
+:root {
+--bg: #f5f6f8;
+--card: #ffffff;
+--muted: #6b7280;
+--accent: #c8102e;
+}
+
+
+* {
+box-sizing: border-box;
+}
+
+
+body {
+margin: 0;
+font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui;
+background: var(--bg);
+color: #111;
+}
+
+
+button {
+transition: all 0.2s ease;
+}
+
+
+button:hover {
+transform: translateY(-1px);
+}
