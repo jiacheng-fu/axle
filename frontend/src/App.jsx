@@ -4,6 +4,8 @@ import VinInput from "./components/VinInput";
 import CarCard from "./components/CarCard";
 import ComparisonPanel from "./components/ComparisonPanel";
 import SkeletonCard from "./components/SkeletonCard";
+import CarIcon from "./components/icons/CarIcon";
+import DownloadIcon from "./components/icons/DownloadIcon";
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -56,9 +58,16 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <h1 className="app-title">Used Car Intelligence</h1>
-        <p className="app-subtitle">VIN-powered insights for smarter dealership decisions</p>
+      <header className="app-header" style={{display:'flex', alignItems:'center', gap:12}}>
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          <div style={{width:48, height:48, display:'grid', placeItems:'center', background:'white', borderRadius:12, boxShadow:'var(--shadow)'}}>
+            <CarIcon width={28} height={28} />
+          </div>
+          <div>
+            <h1 className="app-title">Used Car Intelligence</h1>
+            <p className="app-subtitle">VIN-powered insights for smarter dealership decisions</p>
+          </div>
+        </div>
       </header>
 
       <VinInput onSubmit={handleCompare} />
@@ -74,7 +83,10 @@ export default function App() {
                 <span className="meta-badge">Avg reliability: {Math.round((data.cars.reduce((s,c)=>s+(c.reliability_score||0),0)||0)/data.cars.length||0)}</span>
               </div>
               <div>
-                <button className="btn-primary" onClick={exportCSV}>Export CSV</button>
+                <button className="btn-primary" onClick={exportCSV} style={{display:'inline-flex', alignItems:'center', gap:8}}>
+                  <DownloadIcon />
+                  Export CSV
+                </button>
               </div>
             </div>
 
