@@ -6,10 +6,13 @@ export default function MessageList({ messages }) {
 
   useEffect(() => {
     // Scroll to bottom when messages change
-    if (endRef.current) {
+    if (listRef.current) {
       // Use setTimeout to ensure DOM has updated
       setTimeout(() => {
-        endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        // Scroll only the message list container, not the entire page
+        if (listRef.current) {
+          listRef.current.scrollTop = listRef.current.scrollHeight;
+        }
       }, 100);
     }
   }, [messages]);
