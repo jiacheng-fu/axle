@@ -27,10 +27,25 @@ export default function App() {
   const [prefCount, setPrefCount] = useState(0);
   const [showPanels, setShowPanels] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [backendState, setBackendState] = useState({});
   const chatRailRef = useRef(null);
   const inputRef = useRef(null);
 
   const canShowResults = useMemo(() => zip && prefCount > 0, [zip, prefCount]);
+  const summaryLines = useMemo(() => {
+    const entries = Object.entries(backendState);
+    if (!entries.length) return [];
+
+    return entries.map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return `${key}: ${value.join(", ") || "—"}`;
+      }
+      if (value === null || value === undefined || value === "") {
+        return `${key}: —`;
+      }
+      return `${key}: ${value}`;
+    });
+  }, [backendState]);
 
   useEffect(() => {
     if (!showPanels || chatOpen) return;
@@ -98,6 +113,7 @@ export default function App() {
     if (stage === "zip") {
       setZip(trimmed);
       setStage("prefs");
+      setBackendState({ zip: trimmed, features: [] });
       addBotPrompt([
         `Got it. I will search around ${trimmed}.`,
         "Now tell me the features, budget, or brands you want."
@@ -109,7 +125,10 @@ export default function App() {
       ]);
     }
 
-    await sendUserMessage(payload);
+    const response = await sendUserMessage(payload);
+    if (response?.state) {
+      setBackendState(response.state);
+    }
   };
 
   const handleShowResults = async () => {
@@ -123,11 +142,14 @@ export default function App() {
       "Results will appear below once the backend is wired up."
     ]);
 
-    await sendUserMessage({
+    const response = await sendUserMessage({
       text: "show_results",
       stage: "done",
       zip
     });
+    if (response?.state) {
+      setBackendState(response.state);
+    }
   };
 
   return (
@@ -155,6 +177,20 @@ export default function App() {
               <span className={`status-dot status-${stage}`} />
               <span>{stage === "zip" ? "Collecting zip" : stage === "prefs" ? "Collecting preferences" : "Ready"}</span>
             </div>
+          </div>
+          <div className="summary-strip">
+            <span className="summary-title">Captured parameters</span>
+            {summaryLines.length ? (
+              <div className="summary-list">
+                {summaryLines.map((line) => (
+                  <span key={line} className="summary-item">
+                    {line}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="summary-empty">No parameters captured yet.</span>
+            )}
           </div>
 
           <MessageList messages={messages} />
