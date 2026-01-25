@@ -33,17 +33,31 @@ Allowed keys:
 - max_year (number)
 - max_price (number)
 - max_mileage (number)
-- exterior_color (string),
-- body_type (string),
-- seating_capacity (number),
-- horsepower (number),
-- interior_color (string),
+- exterior_color (array of strings OR single string) - use array if user mentions multiple colors like "red or silver"
+- body_type (array of strings OR single string) - use array if user mentions multiple types like "truck or SUV"
+- seating_capacity (number)
+- horsepower (number)
+- interior_color (array of strings OR single string) - use array if user mentions multiple colors
+- drivetrain (string) - values: "AWD", "4WD", "FWD", "RWD", "All Wheel Drive", "Four Wheel Drive", "Front Wheel Drive", "Rear Wheel Drive"
 - features (array of strings)
 
 Rules:
 - Normalize brands and models to proper capitalization.
 - Normalize features to lowercase canonical labels.
 - If nothing relevant is mentioned, output {}.
+- When user mentions multiple options for the same parameter, use an array:
+  * "red or silver" → exterior_color: ["red", "silver"]
+  * "truck or SUV" → body_type: ["truck", "SUV"]
+  * "sedan, coupe, or hatchback" → body_type: ["sedan", "coupe", "hatchback"]
+- IMPORTANT: Expand abstract/vague terms into concrete features:
+  * "premium interior" → ["leather upholstery", "heated front seats", "power driver seat", "navigation system"]
+  * "luxury features" → ["leather upholstery", "heated front seats", "ventilated front seats", "power moonroof", "navigation system", "memory seat"]
+  * "tech features" → ["navigation system", "wireless phone connectivity: bluetooth", "blind spot sensor: warning", "parking sensors: front and rear w/rear camera"]
+  * "safety features" → ["blind spot sensor: warning", "parking sensors: front and rear w/rear camera", "distance pacing cruise control", "exterior parking camera rear"]
+  * "comfort features" → ["heated front seats", "automatic temperature control", "power driver seat", "leather upholstery"]
+  * "family friendly" → ["3rd row seats: split-bench", "rear air conditioning", "entertainment system"]
+  * "off-road" / "adventure" → set drivetrain to "AWD" or "4WD" AND add features: ["roof rack", "trailer hitch receiver"]
+  * "sporty" / "performance" → set higher horsepower requirement AND add features: ["spoiler", "alloy wheels"]
 
 Allowed feature strings:
     "Automatic temperature control",
@@ -294,11 +308,12 @@ SCHEMA = {
     "max_year": int,
     "max_price": int,
     "max_mileage": int,
-    "exterior_color": str,
-    "body_type": str,
-    "seating_capacity":int,
+    "exterior_color": (str, list),  # Can be string or list
+    "body_type": (str, list),       # Can be string or list
+    "seating_capacity": int,
     "horsepower": int,
-    "interior_color": str,
+    "interior_color": (str, list),  # Can be string or list
+    "drivetrain": str,
     "features": list
 }
 
@@ -357,7 +372,7 @@ def normalize_list(items):
 
 def score_listing(listing: dict, prefs: dict) -> tuple:
     """Score listing and return (score, explanation)"""
-    score = 100  # Start at perfect
+    score = 0  # Start at 0, earn points for matches
     reasons = []
     vehicle = listing.get("vehicle", {})
     features_raw = listing.get("highlighted_features_raw", []) or []
@@ -367,109 +382,232 @@ def score_listing(listing: dict, prefs: dict) -> tuple:
     year = vehicle.get("year")
     price = vehicle.get("price_usd")
     mileage = vehicle.get("odometer_miles")
+    exterior_color = normalize_text(vehicle.get("exterior_color", "")) if vehicle.get("exterior_color") else ""
+    interior_color = normalize_text(vehicle.get("interior_color", "")) if vehicle.get("interior_color") else ""
 
     pref_brands = normalize_list(prefs.get("brand", []))
     pref_models = normalize_list(prefs.get("model", []))
     pref_features = normalize_list(prefs.get("features", []))
     listing_features = normalize_list(features_raw)
 
-    # Brand matching
+    # Brand matching (CRITICAL - required field)
     if pref_brands:
         if make in pref_brands:
-            score += 20
+            score += 25
             reasons.append(f"✓ Matches brand: {vehicle.get('make', '')}")
         else:
-            score -= 15
+            score -= 40  # Heavy penalty for wrong brand
             reasons.append(f"⚠ Different brand: {vehicle.get('make', '')} (wanted {', '.join(prefs.get('brand', []))})")
+    else:
+        # No brand preference, give small bonus
+        score += 5
 
-    # Model matching
+    # Model matching (CRITICAL - required field)
     if pref_models:
         if model in pref_models:
-            score += 15
+            score += 25
             reasons.append(f"✓ Matches model: {vehicle.get('model', '')}")
         else:
-            score -= 10
+            score -= 35  # Heavy penalty for wrong model
             reasons.append(f"⚠ Different model: {vehicle.get('model', '')} (wanted {', '.join(prefs.get('model', []))})")
+    else:
+        # No model preference, give small bonus
+        score += 5
 
-    # Year range
+    # Year range (IMPORTANT)
     min_year = prefs.get("min_year")
     max_year = prefs.get("max_year")
+    has_year_constraint = isinstance(min_year, int) or isinstance(max_year, int)
+
     if isinstance(min_year, int) and isinstance(year, int):
         if year >= min_year:
-            score += 5
+            score += 10
         else:
-            score -= 20
+            score -= 30  # Stricter penalty for being too old
             reasons.append(f"⚠ Older than {min_year} ({year})")
 
     if isinstance(max_year, int) and isinstance(year, int):
         if year <= max_year:
-            score += 5
+            score += 10
         else:
-            score -= 20
+            score -= 30  # Stricter penalty for being too new
             reasons.append(f"⚠ Newer than {max_year} ({year})")
 
-    if isinstance(year, int) and not reasons[-1:]:
+    if isinstance(year, int) and has_year_constraint and not any("Year" in r or str(year) in r for r in reasons):
+        reasons.append(f"✓ Year: {year}")
+    elif isinstance(year, int) and not has_year_constraint:
+        score += 3
         reasons.append(f"✓ Year: {year}")
 
-    # Price constraint (hard constraint)
+    # Price constraint (CRITICAL - hard constraint)
     max_price = prefs.get("max_price")
     if isinstance(max_price, int) and isinstance(price, (int, float)):
         if price <= max_price:
             # Bonus for being cheaper within budget
             savings_ratio = 1 - (price / max_price)
-            bonus = int(10 * savings_ratio)
+            bonus = int(15 * savings_ratio)  # Increased bonus for better value
             score += bonus
             reasons.append(f"✓ Within budget: ${int(price):,} (max ${max_price:,})")
         else:
             over_budget = price - max_price
-            score -= 30
+            score -= 50  # CRITICAL penalty for over budget
             reasons.append(f"⚠ Over budget by ${int(over_budget):,} (${int(price):,} vs ${max_price:,})")
+    elif isinstance(price, (int, float)):
+        # No price constraint
+        score += 5
 
-    # Mileage constraint
+    # Mileage constraint (IMPORTANT)
     max_mileage = prefs.get("max_mileage")
     if isinstance(max_mileage, int) and isinstance(mileage, (int, float)):
         if mileage <= max_mileage:
-            score += 5
+            # Bonus for lower mileage
+            mileage_ratio = 1 - (mileage / max_mileage)
+            bonus = int(10 * mileage_ratio)
+            score += bonus
             reasons.append(f"✓ Mileage: {int(mileage):,} miles")
         else:
             over_miles = mileage - max_mileage
-            score -= 15
+            score -= 35  # Significant penalty for high mileage
             reasons.append(f"⚠ {int(over_miles):,} miles over limit ({int(mileage):,} vs {max_mileage:,})")
+    elif isinstance(mileage, (int, float)):
+        # No mileage constraint
+        score += 3
 
-    # Body type constraint (SUV, Sedan, Truck, etc.)
+    # Body type constraint (SUV, Sedan, Truck, etc.) - CRITICAL
     pref_body_type = prefs.get("body_type")
     listing_body_type = normalize_text(vehicle.get("body_style", "")) if vehicle.get("body_style") else ""
     listing_normal_body = normalize_text(vehicle.get("normal_body_style", "")) if vehicle.get("normal_body_style") else ""
     if pref_body_type:
-        pref_body_normalized = normalize_text(pref_body_type)
-        # Check both body_style and normal_body_style fields
-        if (listing_body_type and pref_body_normalized in listing_body_type) or \
-           (listing_normal_body and pref_body_normalized in listing_normal_body):
-            score += 15
+        # Handle both single string and array of body types
+        pref_body_types = [pref_body_type] if isinstance(pref_body_type, str) else pref_body_type
+        pref_body_types_normalized = [normalize_text(bt) for bt in pref_body_types]
+
+        # Check if listing matches any of the preferred body types
+        match_found = False
+        for pref_body_normalized in pref_body_types_normalized:
+            if (listing_body_type and pref_body_normalized in listing_body_type) or \
+               (listing_normal_body and pref_body_normalized in listing_normal_body):
+                match_found = True
+                break
+
+        if match_found:
+            score += 20
             body_display = vehicle.get("body_style", "") or vehicle.get("normal_body_style", "")
             reasons.append(f"✓ Matches body type: {body_display}")
         else:
-            score -= 20
+            score -= 50  # CRITICAL penalty for wrong body type
             body_display = vehicle.get("body_style", "") or vehicle.get("normal_body_style", "") or "Unknown"
-            reasons.append(f"⚠ Different body type: {body_display} (wanted {pref_body_type})")
+            wanted = ", ".join(pref_body_types) if len(pref_body_types) > 1 else pref_body_types[0]
+            reasons.append(f"⚠ Different body type: {body_display} (wanted {wanted})")
+    else:
+        # No body type preference
+        score += 5
+
+    # Drivetrain constraint (AWD, FWD, 4WD, RWD) - IMPORTANT
+    pref_drivetrain = prefs.get("drivetrain")
+    listing_drivetrain = normalize_text(vehicle.get("drivetrain", "")) if vehicle.get("drivetrain") else ""
+    if pref_drivetrain:
+        pref_drivetrain_normalized = normalize_text(pref_drivetrain)
+        # Normalize common variations (AWD = All Wheel Drive, etc.)
+        drivetrain_matches = False
+        if pref_drivetrain_normalized in listing_drivetrain:
+            drivetrain_matches = True
+        elif ("awd" in pref_drivetrain_normalized or "all wheel" in pref_drivetrain_normalized) and \
+             ("awd" in listing_drivetrain or "all wheel" in listing_drivetrain):
+            drivetrain_matches = True
+        elif ("4wd" in pref_drivetrain_normalized or "four wheel" in pref_drivetrain_normalized) and \
+             ("4wd" in listing_drivetrain or "four wheel" in listing_drivetrain):
+            drivetrain_matches = True
+        elif ("fwd" in pref_drivetrain_normalized or "front wheel" in pref_drivetrain_normalized) and \
+             ("fwd" in listing_drivetrain or "front wheel" in listing_drivetrain):
+            drivetrain_matches = True
+        elif ("rwd" in pref_drivetrain_normalized or "rear wheel" in pref_drivetrain_normalized) and \
+             ("rwd" in listing_drivetrain or "rear wheel" in listing_drivetrain):
+            drivetrain_matches = True
+
+        if drivetrain_matches:
+            score += 18
+            reasons.append(f"✓ Matches drivetrain: {vehicle.get('drivetrain', '')}")
+        else:
+            score -= 25  # Significant penalty for wrong drivetrain
+            drivetrain_display = vehicle.get("drivetrain", "") or "Unknown"
+            reasons.append(f"⚠ Different drivetrain: {drivetrain_display} (wanted {pref_drivetrain})")
+    else:
+        # No drivetrain preference
+        score += 3
+
+    # Exterior color constraint (preference, not critical)
+    pref_exterior_color = prefs.get("exterior_color")
+    if pref_exterior_color:
+        # Handle both single string and array of colors
+        pref_colors = [pref_exterior_color] if isinstance(pref_exterior_color, str) else pref_exterior_color
+        pref_colors_normalized = [normalize_text(c) for c in pref_colors]
+
+        # Check if listing matches any of the preferred colors
+        match_found = False
+        for pref_color_normalized in pref_colors_normalized:
+            if exterior_color and pref_color_normalized in exterior_color:
+                match_found = True
+                break
+
+        if match_found:
+            score += 15
+            reasons.append(f"✓ Matches exterior color: {vehicle.get('exterior_color', '')}")
+        else:
+            score -= 12  # Moderate penalty for wrong color (reduced from -30)
+            actual_color = vehicle.get('exterior_color', 'Unknown')
+            wanted = " or ".join(pref_colors) if len(pref_colors) > 1 else pref_colors[0]
+            reasons.append(f"⚠ Different exterior color: {actual_color} (wanted {wanted})")
+    else:
+        # No color preference
+        score += 2
+
+    # Interior color constraint (preference, not critical)
+    pref_interior_color = prefs.get("interior_color")
+    if pref_interior_color:
+        # Handle both single string and array of colors
+        pref_int_colors = [pref_interior_color] if isinstance(pref_interior_color, str) else pref_interior_color
+        pref_int_colors_normalized = [normalize_text(c) for c in pref_int_colors]
+
+        # Check if listing matches any of the preferred interior colors
+        match_found = False
+        for pref_int_color_normalized in pref_int_colors_normalized:
+            if interior_color and pref_int_color_normalized in interior_color:
+                match_found = True
+                break
+
+        if match_found:
+            score += 10
+            reasons.append(f"✓ Matches interior color: {vehicle.get('interior_color', '')}")
+        else:
+            score -= 8  # Light penalty for wrong interior color (reduced from -20)
+            actual_int_color = vehicle.get('interior_color', 'Unknown')
+            wanted = " or ".join(pref_int_colors) if len(pref_int_colors) > 1 else pref_int_colors[0]
+            reasons.append(f"⚠ Different interior color: {actual_int_color} (wanted {wanted})")
+    else:
+        # No interior color preference
+        score += 2
 
     # Horsepower constraint (CRITICAL - hard requirement)
     min_horsepower = prefs.get("horsepower")
     listing_horsepower = vehicle.get("horsepower_hp")  # Fixed: use correct field name
     if isinstance(min_horsepower, int) and isinstance(listing_horsepower, (int, float)):
         if listing_horsepower >= min_horsepower:
-            score += 15
+            score += 20
             reasons.append(f"✓ Horsepower: {int(listing_horsepower)}hp (meets {min_horsepower}+ requirement)")
         else:
             deficit = min_horsepower - listing_horsepower
-            score -= 25
+            score -= 40  # CRITICAL penalty for underpowered
             reasons.append(f"⚠ Underpowered: {int(listing_horsepower)}hp (need {min_horsepower}+, short by {int(deficit)}hp)")
     elif isinstance(min_horsepower, int) and not listing_horsepower:
-        # If horsepower is required but not listed, penalize moderately
-        score -= 15
+        # If horsepower is required but not listed, penalize heavily
+        score -= 25
         reasons.append(f"⚠ Horsepower not listed (need {min_horsepower}+)")
+    else:
+        # No horsepower constraint
+        score += 3
 
-    # Feature matching (normalized by requested features)
+    # Feature matching (IMPORTANT - worth significant points)
     if pref_features:
         # Exact matches
         matched_features = set(pref_features) & set(listing_features)
@@ -493,8 +631,15 @@ def score_listing(listing: dict, prefs: dict) -> tuple:
 
         total_matches = len(matched_features) + fuzzy_matched
         match_ratio = total_matches / len(pref_features)
-        feature_score = int(30 * match_ratio)
+
+        # More aggressive scoring: +40 points max for features, but penalty for missing
+        feature_score = int(40 * match_ratio)
         score += feature_score
+
+        # Additional penalty for poor feature matching
+        missing_ratio = 1 - match_ratio
+        missing_penalty = int(20 * missing_ratio)
+        score -= missing_penalty
 
         exact_count = len(matched_features)
         fuzzy_count = int(fuzzy_matched)
@@ -507,8 +652,12 @@ def score_listing(listing: dict, prefs: dict) -> tuple:
             reasons.append(f"⚠ Has {fuzzy_count} partial feature matches (out of {len(pref_features)})")
         else:
             reasons.append(f"⚠ Missing all {len(pref_features)} requested features")
+    else:
+        # No features requested, small bonus
+        score += 5
 
     # Clamp score to 0-100
+    # Since we start at 0, a perfect match can go over 100, so normalize it
     final_score = max(0, min(100, score))
 
     return (final_score, reasons)
@@ -595,8 +744,8 @@ def rank_listings(prefs: dict, limit: int = 10):
 
     scored.sort(key=lambda item: item[0], reverse=True)
 
-    # Zero-match detection
-    GOOD_MATCH_THRESHOLD = 50
+    # Zero-match detection - stricter threshold now
+    GOOD_MATCH_THRESHOLD = 60  # Raised from 50 due to stricter scoring
     top_score = scored[0][0] if scored else 0
 
     if top_score < GOOD_MATCH_THRESHOLD:
@@ -685,7 +834,7 @@ def extract_labels(user_text: str) -> dict:
 
     print("[extract_labels] sending request to model...", flush=True)
     response = client.chat.completions.create(
-        model="GPT-5.2",
+        model="gpt-4o",  # Precise model for backend preference extraction
         messages=messages,
         temperature=0
     )
@@ -699,9 +848,42 @@ def extract_labels(user_text: str) -> dict:
     print(f"[extract_labels] cleaned={cleaned!r}", flush=True)
     return cleaned
 
+def check_inventory_availability(current_state: dict) -> dict:
+    """Check how many good matches exist with current preferences"""
+    if not current_state:
+        # No preferences yet, assume full inventory available
+        return {"match_count": 1000, "status": "abundant"}
+
+    listings = load_listings()
+    scored = []
+
+    for listing in listings:
+        score, _ = score_listing(listing, current_state)
+        if score >= 60:  # Good match threshold
+            scored.append(score)
+
+    match_count = len(scored)
+    print(f"[check_inventory] {match_count} good matches with current preferences", flush=True)
+
+    # Classify inventory status
+    if match_count >= 15:
+        status = "abundant"  # Plenty of options, can ask for more details
+    elif match_count >= 5:
+        status = "moderate"  # Some options, suggest showing results soon
+    elif match_count >= 1:
+        status = "limited"  # Very few options, stop asking for more details
+    else:
+        status = "none"  # No good matches, need to relax constraints
+
+    return {"match_count": match_count, "status": status}
+
 def generate_bot_response(user_text: str, current_state: dict, stage: str) -> str:
-    """Generate contextual, salesman-like bot response based on user input and current state"""
+    """Generate contextual, inventory-aware bot response based on user input and current state"""
     print(f"[generate_bot_response] user_text={user_text!r}, stage={stage}, state={current_state!r}", flush=True)
+
+    # Check inventory availability with current preferences
+    inventory_info = check_inventory_availability(current_state)
+    print(f"[generate_bot_response] inventory_info={inventory_info!r}", flush=True)
 
     # Build context about what we know so far
     context_parts = []
@@ -713,6 +895,20 @@ def generate_bot_response(user_text: str, current_state: dict, stage: str) -> st
         context_parts.append(f"Budget: ${current_state['max_price']:,}")
     if current_state.get("max_mileage"):
         context_parts.append(f"Max mileage: {current_state['max_mileage']:,}")
+    if current_state.get("body_type"):
+        body_type = current_state['body_type']
+        body_type_str = ', '.join(body_type) if isinstance(body_type, list) else body_type
+        context_parts.append(f"Body type: {body_type_str}")
+    if current_state.get("exterior_color"):
+        ext_color = current_state['exterior_color']
+        ext_color_str = ', '.join(ext_color) if isinstance(ext_color, list) else ext_color
+        context_parts.append(f"Exterior color: {ext_color_str}")
+    if current_state.get("interior_color"):
+        int_color = current_state['interior_color']
+        int_color_str = ', '.join(int_color) if isinstance(int_color, list) else int_color
+        context_parts.append(f"Interior color: {int_color_str}")
+    if current_state.get("drivetrain"):
+        context_parts.append(f"Drivetrain: {current_state['drivetrain']}")
     if current_state.get("min_year") or current_state.get("max_year"):
         year_str = ""
         if current_state.get("min_year"):
@@ -721,12 +917,60 @@ def generate_bot_response(user_text: str, current_state: dict, stage: str) -> st
             year_str = f"{current_state.get('min_year', 'any')}-{current_state['max_year']}"
         context_parts.append(f"Year range: {year_str}")
     if current_state.get("features"):
-        features_str = ', '.join(current_state['features'][:5])
-        if len(current_state['features']) > 5:
-            features_str += f" (+{len(current_state['features']) - 5} more)"
+        features_str = ', '.join(current_state['features'][:3])
+        if len(current_state['features']) > 3:
+            features_str += f" (+{len(current_state['features']) - 3} more)"
         context_parts.append(f"Features: {features_str}")
 
     context_summary = "\n".join(context_parts) if context_parts else "No preferences captured yet"
+
+    # Tailor the prompt based on inventory availability
+    if inventory_info["status"] == "abundant":
+        # Plenty of matches - can ask for more details, but focus on important filters
+        inventory_guidance = f"""INVENTORY STATUS: {inventory_info['match_count']} vehicles match their current preferences.
+
+You can ask for ONE more important detail, but focus on the most impactful filters:
+- Budget/price range (if not specified)
+- Body type (sedan, SUV, truck) (if not specified)
+- Model preference (if only brand specified)
+- Year range (if not specified)
+
+DO NOT ask about:
+- Minor features like color preferences or interior details
+- Multiple questions at once
+- Details that won't significantly narrow results"""
+
+    elif inventory_info["status"] == "moderate":
+        # Moderate matches - suggest showing results or ONE final detail
+        inventory_guidance = f"""INVENTORY STATUS: {inventory_info['match_count']} vehicles match their current preferences.
+
+This is a good number of matches! You should:
+- Acknowledge what they said
+- Suggest they're ready to see results OR ask for ONE final important detail ONLY if a critical filter is missing (budget, body type, or model)
+- Keep it brief and encouraging
+- Don't push for minor details"""
+
+    elif inventory_info["status"] == "limited":
+        # Very few matches - stop asking questions, suggest showing results
+        inventory_guidance = f"""INVENTORY STATUS: Only {inventory_info['match_count']} vehicles match their current preferences.
+
+IMPORTANT: The inventory is getting LIMITED. You MUST:
+- Acknowledge what they said
+- Gently suggest showing them the available options now
+- DO NOT ask for more details - this will further limit matches
+- Be positive about the matches found
+- Example: "Great! I found {inventory_info['match_count']} vehicles that match your preferences. Would you like to see them?"
+"""
+
+    else:  # status == "none"
+        # No good matches - need to suggest relaxing constraints
+        inventory_guidance = """INVENTORY STATUS: No vehicles match their current preferences well.
+
+You should:
+- Acknowledge their preferences
+- Gently suggest they might want to adjust one constraint slightly
+- Offer to show the closest matches available
+- Be encouraging, not discouraging"""
 
     BOT_RESPONSE_PROMPT = f"""You are an expert Toyota car salesman having a friendly conversation with a customer.
 
@@ -735,19 +979,18 @@ User just said: "{user_text}"
 What we know about their preferences so far:
 {context_summary}
 
+{inventory_guidance}
+
 Your task:
 1. Acknowledge what they just mentioned SPECIFICALLY (don't be generic)
-2. If appropriate, ask 1-2 intelligent follow-up questions to understand their needs better
-3. Suggest related features or considerations they might not have thought of
-4. Be conversational, friendly, and helpful - like a real salesperson building rapport
-5. Keep it concise (1-3 sentences)
+2. Follow the inventory guidance above - respect the match count
+3. Be conversational, friendly, and helpful - like a real salesperson building rapport
+4. Keep it concise (1-2 sentences max)
 
-Guidelines:
-- If they mentioned a budget, acknowledge it and ask about priorities within that range
-- If they mentioned features, validate their choice and suggest complementary features
-- If they mentioned a model, acknowledge it and ask about specific use cases
-- If they mentioned family/kids, ask about seating, safety features
-- If they mentioned commute/driving, ask about fuel efficiency, comfort features
+CRITICAL RULES:
+- NEVER ask more than ONE follow-up question
+- If inventory is limited or moderate, strongly encourage showing results
+- Only ask about filters the backend actually supports: brand, model, budget, body type, drivetrain, year range
 - Be genuinely helpful, not pushy
 
 Output ONLY your response text. No preamble, no "Here's my response:", just the conversational text."""
@@ -759,7 +1002,7 @@ Output ONLY your response text. No preamble, no "Here's my response:", just the 
 
     print("[generate_bot_response] sending request to model...", flush=True)
     response = client.chat.completions.create(
-        model="GPT-5.2",
+        model="gpt-4o-mini",  # Faster model for frontend chatbot responses
         messages=messages,
         temperature=0.7  # More creative for conversational responses
     )

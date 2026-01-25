@@ -107,6 +107,10 @@ export default function App() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
 
+    // Check if user is giving an affirmative response to see results
+    const affirmativePattern = /^(yes|yeah|yep|sure|ok|okay|show me|let's see|please|go ahead|sounds good|perfect|great|absolutely)\b/i;
+    const isAffirmative = affirmativePattern.test(trimmed);
+
     const payload = {
       text: trimmed,
       stage,
@@ -144,6 +148,14 @@ export default function App() {
     }
     if (response?.bot_response) {
       addBotPrompt([response.bot_response]);
+    }
+
+    // Auto-transition to results if user gave affirmative response and we can show results
+    if (isAffirmative && canShowResults && stage === "prefs") {
+      // Small delay to let the bot response render first
+      setTimeout(() => {
+        handleShowResults();
+      }, 800);
     }
   };
 
