@@ -1,31 +1,115 @@
 import React from "react";
 
 export default function ResultsShell({ results = [] }) {
+  const hasRelaxations = results.length > 0 && results[0].relaxations && results[0].relaxations.length > 0;
+
   return (
     <section className="future-panel">
-      <h2>Results</h2>
+      <h2>Results {results.length > 0 && `(${results.length})`}</h2>
+
+      {hasRelaxations && (
+        <div style={{
+          padding: "12px 16px",
+          background: "rgba(255, 193, 7, 0.1)",
+          border: "1px solid rgba(255, 193, 7, 0.3)",
+          borderRadius: "8px",
+          marginBottom: "16px"
+        }}>
+          <strong style={{ color: "#ffc107" }}>⚠ Constraints Relaxed</strong>
+          <ul style={{ margin: "8px 0 0 0", paddingLeft: "20px", fontSize: "0.9em" }}>
+            {results[0].relaxations.map((relaxation, i) => (
+              <li key={i} style={{ color: "#ffc107" }}>{relaxation}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {results.length ? (
         <div className="results-list">
           {results.map((item, index) => (
             <div key={`${item.year}-${item.model}-${item.trim}-${index}`} className="results-item">
-              <span className="results-rank">#{index + 1}</span>
               <div className="results-card">
-                <div className="results-media">
-                  {item.image_url ? (
-                    <img src={item.image_url} alt={`${item.year ?? ""} ${item.model ?? "Vehicle"}`} loading="lazy" />
-                  ) : (
-                    <div className="results-fallback">No image</div>
-                  )}
-                </div>
-                <div className="results-content">
-                  <div className="results-meta">
-                    <span className="results-year">{item.year ?? "—"}</span>
-                    <span className="results-model">{item.model ?? "Unknown model"}</span>
-                    <span className="results-trim">{item.trim ?? "Trim N/A"}</span>
+                <div className="results-header">
+                  <div className="results-rank-badge">
+                    <span className="rank-number">#{index + 1}</span>
+                    <span className="match-score" style={{
+                      color: item.match_score_percent >= 75 ? "#4caf50" :
+                             item.match_score_percent >= 50 ? "#ffc107" : "#ff9800"
+                    }}>
+                      {item.match_score_percent}% match
+                    </span>
                   </div>
-                  <p className="results-notes">
-                    {item.dealer_notes || "Dealer description not available."}
-                  </p>
+                </div>
+
+                <div className="results-body">
+                  <div className="results-media">
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={`${item.year ?? ""} ${item.model ?? "Vehicle"}`} loading="lazy" />
+                    ) : (
+                      <div className="results-fallback">No image</div>
+                    )}
+                  </div>
+
+                  <div className="results-content">
+                    <div className="results-title">
+                      <h3>
+                        {item.year ?? "—"} {item.make ?? ""} {item.model ?? "Unknown"}
+                        {item.trim && <span className="trim-badge">{item.trim}</span>}
+                      </h3>
+                    </div>
+
+                    <div className="results-specs">
+                      {item.price && (
+                        <div className="spec-item price">
+                          <strong>${item.price.toLocaleString()}</strong>
+                        </div>
+                      )}
+                      {item.mileage && (
+                        <div className="spec-item">
+                          <span>{item.mileage.toLocaleString()} miles</span>
+                        </div>
+                      )}
+                      {item.horsepower && (
+                        <div className="spec-item">
+                          <span>{item.horsepower}hp {item.engine && `(${item.engine})`}</span>
+                        </div>
+                      )}
+                      {item.exterior_color && (
+                        <div className="spec-item">
+                          <span>{item.exterior_color}</span>
+                        </div>
+                      )}
+                      {item.drivetrain && (
+                        <div className="spec-item">
+                          <span>{item.drivetrain}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {item.features && item.features.length > 0 && (
+                      <div className="results-features">
+                        <strong>Key Features:</strong>
+                        <ul>
+                          {item.features.map((feature, i) => (
+                            <li key={i}>{feature}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {item.match_reasons && item.match_reasons.length > 0 && (
+                      <div className="match-reasons">
+                        <strong>Why this match:</strong>
+                        <ul>
+                          {item.match_reasons.slice(0, 5).map((reason, i) => (
+                            <li key={i} className={reason.startsWith("✓") ? "reason-good" : "reason-warning"}>
+                              {reason}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -34,8 +118,7 @@ export default function ResultsShell({ results = [] }) {
       ) : (
         <>
           <p>
-            Ranked car matches will appear here once the backend is connected to
-            listings data.
+            Ranked car matches will appear here once you provide your preferences and click "Show Results".
           </p>
           <div className="future-placeholder">
             <div className="placeholder-line" />
