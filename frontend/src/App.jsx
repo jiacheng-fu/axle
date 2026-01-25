@@ -100,14 +100,12 @@ export default function App() {
       setStage("prefs");
       addBotPrompt([
         `Got it. I will search around ${trimmed}.`,
-        "Now tell me the features, budget, or brands you want.",
-        "Is there anything else you'd like to add?"
+        "Now tell me the features, budget, or brands you want."
       ]);
     } else {
       setPrefCount((count) => count + 1);
       addBotPrompt([
-        `Noted: ${trimmed}.`,
-        "Is there anything else you'd like to add?"
+        "Noted. Is there anything else you'd like to add?"
       ]);
     }
 
