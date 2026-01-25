@@ -1,106 +1,152 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import BrandHeader from "./components/BrandHeader.jsx";
+import MessageList from "./components/MessageList.jsx";
+import Composer from "./components/Composer.jsx";
+import ResultsShell from "./components/ResultsShell.jsx";
+import ComparisonShell from "./components/ComparisonShell.jsx";
+import { sendUserMessage } from "./api/client.js";
 
-import VinInput from "./components/VinInput";
-import CarCard from "./components/CarCard";
-import ComparisonPanel from "./components/ComparisonPanel";
-import SkeletonCard from "./components/SkeletonCard";
-import CarIcon from "./components/icons/CarIcon";
-import DownloadIcon from "./components/icons/DownloadIcon";
+const initialMessages = [
+  {
+    id: "intro-1",
+    role: "bot",
+    text: "Welcome to Redline Scout. I can help you narrow down the right used car."
+  },
+  {
+    id: "intro-2",
+    role: "bot",
+    text: "First, what zip code should I use for your search?"
+  }
+];
 
 export default function App() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState(initialMessages);
+  const [input, setInput] = useState("");
+  const [stage, setStage] = useState("zip");
+  const [zip, setZip] = useState("");
+  const [prefCount, setPrefCount] = useState(0);
+  const [showPanels, setShowPanels] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
 
-  async function handleCompare(vins) {
-    setLoading(true);
+  const canShowResults = useMemo(() => zip && prefCount > 0, [zip, prefCount]);
 
-    try {
-      // dynamic import of the small hook that calls backend
-      const mod = await import("./hooks/useCompareCars.js");
-      const res = await mod.compareCars(vins);
-      setData(res);
-    } catch (err) {
-      // fallback demo data for presentation when backend isn't running
-      setData({
-        cars: vins.slice(0, 3).map((v, i) => ({
-          vin: v || `VIN${i}`,
-          year: i === 0 ? "2019" : i === 1 ? "2018" : "2017",
-          make: "Toyota",
-          model: i === 0 ? "Camry" : i === 1 ? "RAV4" : "Corolla",
-          engine: "2.5L I4",
-          fuel_type: "Gasoline",
-          age: i === 0 ? 5 : i === 1 ? 6 : 7,
-          price_estimate: i === 0 ? 18000 : i === 1 ? 15000 : 12000,
-          reliability_score: i === 0 ? 78 : i === 1 ? 72 : 75
-        })),
-        ai_summary: "Demo: Camry recommended for commuters, RAV4 for space, Corolla for budget buyers."
-      });
-    } finally {
-      setLoading(false);
+  const addBotPrompt = (textArray) => {
+    setMessages((prev) => [
+      ...prev,
+      ...textArray.map((text) => ({
+        id: `${Date.now()}-${Math.random()}`,
+        role: "bot",
+        text
+      }))
+    ]);
+  };
+
+  const handleSend = async () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
+    const userMessage = {
+      id: `${Date.now()}-user`,
+      role: "user",
+      text: trimmed
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+
+    const payload = {
+      text: trimmed,
+      stage,
+      zip: stage === "zip" ? trimmed : zip
+    };
+
+    if (stage === "zip") {
+      setZip(trimmed);
+      setStage("prefs");
+      addBotPrompt([
+        `Got it. I will search around ${trimmed}.`,
+        "Now tell me the features, budget, or brands you want.",
+        "Is there anything else you'd like to add?"
+      ]);
+    } else {
+      setPrefCount((count) => count + 1);
+      addBotPrompt([
+        `Noted: ${trimmed}.`,
+        "Is there anything else you'd like to add?"
+      ]);
     }
-  }
 
-  function exportCSV() {
-    if (!data || !data.cars) return;
-    const rows = [
-      ["vin", "year", "make", "model", "price_estimate", "reliability_score"],
-      ...data.cars.map(c => [c.vin, c.year || '', c.make||'', c.model||'', c.price_estimate||'', c.reliability_score||''])
-    ];
-    const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'comparison.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+    await sendUserMessage(payload);
+  };
+
+  const handleShowResults = async () => {
+    if (!canShowResults) return;
+
+    setStage("done");
+    setShowPanels(true);
+    setChatOpen(false);
+    addBotPrompt([
+      "Perfect. I'll line up the best matches and get them ready for you.",
+      "Results will appear below once the backend is wired up."
+    ]);
+
+    await sendUserMessage({
+      text: "show_results",
+      stage: "done",
+      zip
+    });
+  };
 
   return (
-    <div className="app-container">
-      <header className="app-header" style={{display:'flex', alignItems:'center', gap:12}}>
-        <div style={{display:'flex', alignItems:'center', gap:12}}>
-          <div style={{width:48, height:48, display:'grid', placeItems:'center', background:'white', borderRadius:12, boxShadow:'var(--shadow)'}}>
-            <CarIcon width={28} height={28} />
-          </div>
-          <div>
-            <h1 className="app-title">Used Car Intelligence</h1>
-            <p className="app-subtitle">VIN-powered insights for smarter dealership decisions</p>
-          </div>
-        </div>
-      </header>
+    <div className="page">
+      <div className="bg-orb orb-1" aria-hidden="true" />
+      <div className="bg-orb orb-2" aria-hidden="true" />
+      <div className="bg-grid" aria-hidden="true" />
 
-      <VinInput onSubmit={handleCompare} />
+      <BrandHeader />
 
-      {loading && <div className="loading">Analyzing vehicles...</div>}
-
-      {data && (
-        <section className="compare-section fade-up">
-          <div>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-              <div>
-                <span className="meta-badge">Avg price: ${Math.round((data.cars.reduce((s,c)=>s+(c.price_estimate||0),0)||0)/data.cars.length||0)}</span>
-                <span className="meta-badge">Avg reliability: {Math.round((data.cars.reduce((s,c)=>s+(c.reliability_score||0),0)||0)/data.cars.length||0)}</span>
-              </div>
-              <div>
-                <button className="btn-primary" onClick={exportCSV} style={{display:'inline-flex', alignItems:'center', gap:8}}>
-                  <DownloadIcon />
-                  Export CSV
-                </button>
-              </div>
+      <main className="content">
+        <section
+          className={`chat-card ${showPanels ? "chat-overlay" : ""} ${showPanels && !chatOpen ? "chat-collapsed" : ""}`}
+        >
+          <div className="chat-header">
+            <div>
+              <h2>Chat with Scout</h2>
+              <p>Keep adding details until you are ready to see results.</p>
             </div>
-
-            <div className="cards-grid" style={{marginTop:16}}>
-              {loading
-                ? [0,1,2].map(i=> <SkeletonCard key={i} />)
-                : data.cars.map((car) => (
-                    <CarCard key={car.vin} car={car} />
-                  ))}
+            <div className="chat-status">
+              <span className={`status-dot status-${stage}`} />
+              <span>{stage === "zip" ? "Collecting zip" : stage === "prefs" ? "Collecting preferences" : "Ready"}</span>
             </div>
           </div>
 
-          <ComparisonPanel summary={data.ai_summary} />
+          <MessageList messages={messages} />
+
+          <Composer
+            value={input}
+            onChange={setInput}
+            onSend={handleSend}
+            onShowResults={handleShowResults}
+            canShowResults={canShowResults}
+            stage={stage}
+          />
         </section>
+        {showPanels && (
+          <section className="results-stage">
+            <ResultsShell />
+            <ComparisonShell />
+          </section>
+        )}
+      </main>
+      {showPanels && (
+        <button
+          type="button"
+          className={`chat-toggle ${chatOpen ? "chat-toggle-open" : ""}`}
+          aria-label={chatOpen ? "Hide chat" : "Open chat"}
+          onClick={() => setChatOpen((open) => !open)}
+        >
+          <span className="chat-toggle-icon">💬</span>
+        </button>
       )}
     </div>
   );
