@@ -16,6 +16,8 @@ client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY")
 )
 
+DATA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "carData.json"))
+
 SYSTEM_PROMPT = """
 You extract structured car preferences from a single user sentence.
 
@@ -31,6 +33,11 @@ Allowed keys:
 - max_year (number)
 - max_price (number)
 - max_mileage (number)
+- exterior_color (string),
+- body_type (string),
+- seating_capacity (number),
+- horsepower (number),
+- interior_color (string),
 - features (array of strings)
 
 Rules:
@@ -103,8 +110,94 @@ SCHEMA = {
     "max_year": int,
     "max_price": int,
     "max_mileage": int,
+    "exterior_color": str,
+    "body_type": str,
+    "seating_capacity":int,
+    "horsepower": int,
+    "interior_color": str,
     "features": list
 }
+
+def load_listings():
+    if not os.path.exists(DATA_PATH):
+        print(f"[data] carData.json not found at {DATA_PATH}", flush=True)
+        return []
+    try:
+        with open(DATA_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("listings", [])
+    except Exception as exc:
+        print(f"[data] failed to load listings: {exc}", flush=True)
+        return []
+
+def normalize_text(value: str) -> str:
+    return value.strip().lower()
+
+def normalize_list(items):
+    return [normalize_text(item) for item in items if isinstance(item, str)]
+
+def score_listing(listing: dict, prefs: dict) -> int:
+    score = 0
+    vehicle = listing.get("vehicle", {})
+    features_raw = listing.get("highlighted_features_raw", []) or []
+
+    make = normalize_text(vehicle.get("make", "")) if vehicle.get("make") else ""
+    model = normalize_text(vehicle.get("model", "")) if vehicle.get("model") else ""
+    year = vehicle.get("year")
+    price = vehicle.get("price_usd")
+    mileage = vehicle.get("odometer_miles")
+
+    pref_brands = normalize_list(prefs.get("brand", []))
+    pref_models = normalize_list(prefs.get("model", []))
+    pref_features = normalize_list(prefs.get("features", []))
+    listing_features = normalize_list(features_raw)
+
+    if pref_brands:
+        score += 5 if make in pref_brands else -2
+    if pref_models:
+        score += 3 if model in pref_models else -1
+
+    min_year = prefs.get("min_year")
+    max_year = prefs.get("max_year")
+    if isinstance(min_year, int) and isinstance(year, int):
+        score += 2 if year >= min_year else -4
+    if isinstance(max_year, int) and isinstance(year, int):
+        score += 2 if year <= max_year else -4
+
+    max_price = prefs.get("max_price")
+    if isinstance(max_price, int) and isinstance(price, (int, float)):
+        score += 2 if price <= max_price else -3
+
+    max_mileage = prefs.get("max_mileage")
+    if isinstance(max_mileage, int) and isinstance(mileage, (int, float)):
+        score += 2 if mileage <= max_mileage else -2
+
+    if pref_features:
+        match_count = len(set(pref_features) & set(listing_features))
+        score += 2 * match_count
+
+    return score
+
+def rank_listings(prefs: dict, limit: int = 10):
+    listings = load_listings()
+    scored = []
+    for listing in listings:
+        score = score_listing(listing, prefs)
+        scored.append((score, listing))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    top = []
+    for score, listing in scored[:limit]:
+        vehicle = listing.get("vehicle", {})
+        image_urls = listing.get("image_urls", []) or []
+        top.append({
+            "year": vehicle.get("year"),
+            "model": vehicle.get("model"),
+            "trim": vehicle.get("trim"),
+            "image_url": image_urls[0] if image_urls else None,
+            "dealer_notes": listing.get("dealer_notes"),
+            "score": score
+        })
+    return top
 
 
 def extract_labels(user_text: str) -> dict:
@@ -225,7 +318,9 @@ def update_preferences(payload: PreferenceInput):
 
     if payload.stage == "done":
         print(f"[preferences] done, state={state!r}", flush=True)
-        return {"state": state}
+        results = rank_listings(state)
+        print(f"[preferences] results_count={len(results)}", flush=True)
+        return {"state": state, "results": results}
 
     try:
         update = extract_labels(payload.text)

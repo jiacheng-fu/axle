@@ -391,14 +391,15 @@ p {
 }
 
 .future-panel {
-  background: #111111;
-  color: #f4f4f4;
+  background: #ffffff;
+  color: #1a1a1a;
   border-radius: var(--radius-md);
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(217, 17, 31, 0.12);
 }
 
 .future-panel h2 {
@@ -406,8 +407,107 @@ p {
 }
 
 .future-panel p {
-  color: rgba(244, 244, 244, 0.75);
+  color: var(--muted);
   line-height: 1.5;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.results-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f9f3f3;
+  border: 1px solid rgba(217, 17, 31, 0.16);
+}
+
+.results-rank {
+  font-weight: 700;
+  color: var(--red-dark);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+
+.results-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+}
+
+.results-year {
+  font-weight: 600;
+}
+
+.results-model {
+  font-weight: 600;
+}
+
+.results-trim {
+  color: var(--muted);
+}
+
+.results-card {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+  width: 100%;
+}
+
+.results-media {
+  width: 240px;
+  height: 180px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(217, 17, 31, 0.08);
+  display: grid;
+  place-items: center;
+}
+
+.results-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.results-fallback {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.results-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.results-notes {
+  margin: 0;
+  color: #1a1a1a;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 600px) {
+  .results-card {
+    grid-template-columns: 1fr;
+  }
+  .results-media {
+    width: 100%;
+    height: 160px;
+  }
 }
 
 .future-placeholder {
@@ -418,7 +518,7 @@ p {
 .placeholder-line {
   height: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.3));
+  background: linear-gradient(90deg, rgba(217, 17, 31, 0.15), rgba(17, 17, 17, 0.08));
   animation: shimmer 2s infinite;
 }
 

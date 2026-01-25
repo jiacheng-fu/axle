@@ -28,6 +28,7 @@ export default function App() {
   const [showPanels, setShowPanels] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
   const [backendState, setBackendState] = useState({});
+  const [results, setResults] = useState([]);
   const chatRailRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -114,6 +115,7 @@ export default function App() {
       setZip(trimmed);
       setStage("prefs");
       setBackendState({ zip: trimmed, features: [] });
+      setResults([]);
       addBotPrompt([
         `Got it. I will search around ${trimmed}.`,
         "Now tell me the features, budget, or brands you want."
@@ -149,6 +151,9 @@ export default function App() {
     });
     if (response?.state) {
       setBackendState(response.state);
+    }
+    if (response?.results) {
+      setResults(response.results);
     }
   };
 
@@ -218,7 +223,7 @@ export default function App() {
         </div>
         {showPanels && (
           <section className="results-stage">
-            <ResultsShell />
+            <ResultsShell results={results} />
             <ComparisonShell />
           </section>
         )}
