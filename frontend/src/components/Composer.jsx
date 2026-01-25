@@ -6,7 +6,8 @@ export default function Composer({
   onSend,
   onShowResults,
   canShowResults,
-  stage
+  stage,
+  inputRef
 }) {
   const handleKeyDown = useCallback(
     (event) => {
@@ -28,6 +29,7 @@ export default function Composer({
       <textarea
         id="chat-input"
         className="composer-input"
+        ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
