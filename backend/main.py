@@ -133,9 +133,11 @@ def merge_state(state: dict, update: dict) -> dict:
 state = {}
 
 user_inputs = [
-    "Something under 15k",
+    "Something under 15 bands",
     "Prefer Toyota or Honda",
-    "Must have Apple CarPlay"
+    "Must have Apple CarPlay",
+    "I'd like a 2023 or newer",
+    "actually I want it under 10k"
 ]
 
 for text in user_inputs:
