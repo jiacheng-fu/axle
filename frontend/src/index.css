@@ -140,6 +140,27 @@ p {
   z-index: 1;
 }
 
+.chat-rail {
+  position: relative;
+}
+
+.chat-rail-active {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(520px, 92vw);
+  padding: 24px;
+  z-index: 4;
+  display: flex;
+  align-items: stretch;
+  transition: transform 1.1s cubic-bezier(0.22, 0.8, 0.2, 1);
+}
+
+.chat-rail-collapsed {
+  transform: translateX(calc(-100% + 44px));
+}
+
 .chat-card {
   background: var(--card);
   border-radius: var(--radius-lg);
@@ -149,23 +170,11 @@ p {
   flex-direction: column;
   gap: 20px;
   backdrop-filter: blur(10px);
-  transition: transform 0.6s cubic-bezier(0.22, 0.8, 0.2, 1), opacity 0.4s ease;
-}
-
-.chat-overlay {
-  position: fixed;
-  left: 24px;
-  top: 140px;
-  width: min(520px, 90vw);
-  max-height: calc(100vh - 180px);
-  overflow: auto;
-  z-index: 4;
-}
-
-.chat-collapsed {
-  transform: translateX(-120%);
-  opacity: 0;
-  pointer-events: none;
+  transition: transform 1.1s cubic-bezier(0.22, 0.8, 0.2, 1), opacity 0.4s ease;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .chat-header {
@@ -219,6 +228,12 @@ p {
   overflow-y: auto;
   padding-right: 8px;
   scroll-behavior: smooth;
+}
+
+.chat-rail-active .message-list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 .message {
@@ -428,12 +443,12 @@ p {
     padding: 20px;
   }
 
-  .chat-overlay {
-    left: 16px;
-    right: 16px;
-    width: auto;
-    top: 120px;
-    max-height: calc(100vh - 160px);
+  .chat-rail-active {
+    width: 100%;
+    padding: 16px;
+  }
+  .chat-toggle {
+    right: -12px;
   }
 
   .btn-primary,
@@ -461,9 +476,10 @@ p {
 }
 
 .chat-toggle {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
+  position: absolute;
+  right: -18px;
+  top: 16px;
+  transform: none;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -483,11 +499,13 @@ p {
 }
 
 .chat-toggle:hover {
-  transform: translateY(-2px);
+  transform: translateX(2px);
 }
 
 .chat-toggle-icon {
-  font-size: 1.4rem;
+  font-size: 1.2rem;
+  letter-spacing: 0.12em;
+  margin-left: 0.1em;
   line-height: 1;
 }
 

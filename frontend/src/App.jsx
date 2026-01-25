@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import BrandHeader from "./components/BrandHeader.jsx";
 import MessageList from "./components/MessageList.jsx";
 import Composer from "./components/Composer.jsx";
@@ -27,8 +27,43 @@ export default function App() {
   const [prefCount, setPrefCount] = useState(0);
   const [showPanels, setShowPanels] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const chatRailRef = useRef(null);
+  const inputRef = useRef(null);
 
   const canShowResults = useMemo(() => zip && prefCount > 0, [zip, prefCount]);
+
+  useEffect(() => {
+    if (!showPanels || chatOpen) return;
+
+    const handleMouseMove = (event) => {
+      if (event.clientX <= 28) {
+        setChatOpen(true);
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [showPanels, chatOpen]);
+
+  useEffect(() => {
+    if (!showPanels || !chatOpen) return;
+    const handleOutsideClick = (event) => {
+      if (!chatRailRef.current) return;
+      if (!chatRailRef.current.contains(event.target)) {
+        setChatOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [showPanels, chatOpen]);
+
+  useEffect(() => {
+    if (!showPanels || !chatOpen) return;
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [showPanels, chatOpen]);
 
   const addBotPrompt = (textArray) => {
     setMessages((prev) => [
@@ -106,9 +141,13 @@ export default function App() {
       <BrandHeader />
 
       <main className="content">
-        <section
-          className={`chat-card ${showPanels ? "chat-overlay" : ""} ${showPanels && !chatOpen ? "chat-collapsed" : ""}`}
+        <div
+          ref={chatRailRef}
+          className={`chat-rail ${showPanels ? "chat-rail-active" : ""} ${
+            showPanels && !chatOpen ? "chat-rail-collapsed" : ""
+          }`}
         >
+          <section className="chat-card">
           <div className="chat-header">
             <div>
               <h2>Chat with Scout</h2>
@@ -129,8 +168,20 @@ export default function App() {
             onShowResults={handleShowResults}
             canShowResults={canShowResults}
             stage={stage}
+            inputRef={inputRef}
           />
-        </section>
+          </section>
+          {showPanels && (
+            <button
+              type="button"
+              className={`chat-toggle ${chatOpen ? "chat-toggle-open" : ""}`}
+              aria-label={chatOpen ? "Hide chat" : "Open chat"}
+              onClick={() => setChatOpen((open) => !open)}
+            >
+              <span className="chat-toggle-icon">...</span>
+            </button>
+          )}
+        </div>
         {showPanels && (
           <section className="results-stage">
             <ResultsShell />
@@ -138,16 +189,6 @@ export default function App() {
           </section>
         )}
       </main>
-      {showPanels && (
-        <button
-          type="button"
-          className={`chat-toggle ${chatOpen ? "chat-toggle-open" : ""}`}
-          aria-label={chatOpen ? "Hide chat" : "Open chat"}
-          onClick={() => setChatOpen((open) => !open)}
-        >
-          <span className="chat-toggle-icon">💬</span>
-        </button>
-      )}
     </div>
   );
 }
