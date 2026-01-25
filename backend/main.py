@@ -264,29 +264,68 @@ FEATURE_ALIASES = {
 }
 
 TOYOTA_SUBSTITUTES = {
-    # Sedans (by size/price tier)
-    "camry": ["avalon", "corolla", "camry hybrid"],
-    "corolla": ["camry", "prius", "corolla hybrid"],
-    "avalon": ["camry", "es 350"],
-    "prius": ["corolla hybrid", "camry hybrid", "corolla"],
+    # Sedans (by size/price tier) - Enhanced with cross-brand alternatives
+    "camry": ["avalon", "corolla", "camry hybrid", "accord", "altima", "malibu", "sonata"],
+    "corolla": ["camry", "prius", "corolla hybrid", "civic", "sentra", "elantra", "mazda3"],
+    "avalon": ["camry", "es 350", "accord", "maxima", "genesis g70"],
+    "prius": ["corolla hybrid", "camry hybrid", "corolla", "insight", "ioniq"],
 
-    # SUVs (by size)
-    "rav4": ["highlander", "4runner", "venza", "rav4 prime", "rav4 hybrid"],
-    "highlander": ["4runner", "rav4", "sequoia", "venza"],
-    "4runner": ["highlander", "sequoia", "tacoma"],
-    "venza": ["rav4", "highlander"],
-    "sequoia": ["highlander", "4runner", "tundra"],
+    # SUVs (by size) - Enhanced with cross-brand alternatives
+    "rav4": ["highlander", "4runner", "venza", "rav4 prime", "rav4 hybrid", "cr-v", "rogue", "cx-5", "tucson", "sportage"],
+    "highlander": ["4runner", "rav4", "sequoia", "venza", "pilot", "pathfinder", "cx-9", "palisade", "telluride"],
+    "4runner": ["highlander", "sequoia", "tacoma", "grand cherokee", "pathfinder", "bronco"],
+    "venza": ["rav4", "highlander", "rav4 hybrid"],
+    "sequoia": ["highlander", "4runner", "tundra", "expedition", "tahoe", "suburban", "yukon", "armada"],
+    "corolla cross": ["rav4", "corolla", "c-hr", "cr-v", "hrv", "trailblazer", "seltos"],
+    "c-hr": ["corolla", "rav4", "corolla cross", "hrv", "venue", "soul"],
 
-    # Trucks
-    "tacoma": ["tundra", "4runner"],
-    "tundra": ["tacoma", "sequoia"],
+    # Trucks - Enhanced with cross-brand alternatives
+    "tacoma": ["tundra", "4runner", "colorado", "ranger", "frontier", "gladiator"],
+    "tundra": ["tacoma", "sequoia", "f-150", "silverado", "ram 1500", "titan"],
 
     # Compact/Crossover
-    "c-hr": ["corolla", "rav4"],
-    "yaris": ["corolla", "prius"],
+    "yaris": ["corolla", "prius", "fit", "rio", "accent"],
 
-    # Minivans
-    "sienna": ["highlander", "sequoia"],
+    # Minivans - Enhanced with cross-brand alternatives
+    "sienna": ["highlander", "sequoia", "odyssey", "pacifica", "carnival"],
+
+    # Hybrids/Electric
+    "rav4 prime": ["rav4 hybrid", "rav4", "highlander hybrid"],
+    "rav4 hybrid": ["rav4", "rav4 prime", "venza", "cr-v hybrid"],
+    "camry hybrid": ["camry", "avalon", "accord hybrid", "altima"],
+    "corolla hybrid": ["corolla", "prius", "prius prime", "insight"],
+    "highlander hybrid": ["highlander", "rav4 hybrid", "venza", "pilot"],
+    "prius prime": ["prius", "corolla hybrid", "ioniq plug-in"],
+
+    # Performance/Sports
+    "gr supra": ["86", "brz", "370z", "mustang"],
+    "86": ["gr supra", "brz", "miata"],
+
+    # Luxury (Lexus cross-references)
+    "es 350": ["avalon", "camry", "accord", "genesis g70"],
+    "rx 450h": ["highlander hybrid", "venza", "x5", "glc"],
+    "gx 460": ["4runner", "sequoia", "grand cherokee"],
+
+    # Cross-brand compact SUVs
+    "cr-v": ["rav4", "rogue", "cx-5", "tucson", "sportage", "escape"],
+    "rogue": ["rav4", "cr-v", "cx-5", "tucson", "escape"],
+    "cx-5": ["rav4", "cr-v", "rogue", "tucson", "sportage"],
+    "tucson": ["rav4", "cr-v", "rogue", "cx-5", "sportage"],
+    "escape": ["rav4", "cr-v", "rogue", "cx-5"],
+
+    # Cross-brand mid-size SUVs
+    "pilot": ["highlander", "pathfinder", "cx-9", "palisade", "telluride"],
+    "pathfinder": ["highlander", "pilot", "cx-9", "explorer"],
+    "palisade": ["highlander", "pilot", "telluride", "cx-9"],
+    "telluride": ["highlander", "palisade", "pilot", "cx-9"],
+
+    # Cross-brand sedans
+    "accord": ["camry", "altima", "malibu", "sonata", "mazda6"],
+    "civic": ["corolla", "sentra", "elantra", "mazda3"],
+    "altima": ["camry", "accord", "malibu", "sonata"],
+    "malibu": ["camry", "accord", "altima", "sonata"],
+    "sonata": ["camry", "accord", "altima", "malibu"],
+    "elantra": ["corolla", "civic", "sentra", "mazda3"],
 }
 
 # Bryan/College Station area zip codes
@@ -698,54 +737,86 @@ def relax_constraints(prefs: dict, level: int) -> tuple:
     relaxations = []
 
     if level >= 1:
-        # Level 1: Remove half of features (keep most important)
+        # Level 1: Remove least important features (keep top 5)
         features = relaxed.get("features", [])
-        if len(features) > 3:
-            keep_count = max(3, len(features) // 2)
+        if len(features) > 5:
+            keep_count = max(5, len(features) // 2)
             relaxed["features"] = features[:keep_count]
-            relaxations.append(f"Kept only {keep_count} most important features")
+            relaxations.append(f"Focused on {keep_count} key features")
 
     if level >= 2:
-        # Level 2: Increase price by 20%
-        max_price = relaxed.get("max_price")
-        if max_price:
-            new_price = int(max_price * 1.2)
-            relaxed["max_price"] = new_price
-            relaxations.append(f"Increased budget to ${new_price:,}")
+        # Level 2: Remove color preferences (not critical)
+        if relaxed.get("exterior_color"):
+            del relaxed["exterior_color"]
+            relaxations.append("Removed exterior color preference")
+        if relaxed.get("interior_color"):
+            del relaxed["interior_color"]
+            relaxations.append("Removed interior color preference")
 
     if level >= 3:
-        # Level 3: Expand year range by ±2 years
+        # Level 3: Expand year range by ±1 year
         if "min_year" in relaxed:
-            relaxed["min_year"] -= 2
+            relaxed["min_year"] -= 1
             relaxations.append(f"Expanded min year to {relaxed['min_year']}")
         if "max_year" in relaxed:
-            relaxed["max_year"] += 2
+            relaxed["max_year"] += 1
             relaxations.append(f"Expanded max year to {relaxed['max_year']}")
 
     if level >= 4:
-        # Level 4: Increase mileage by 30k
+        # Level 4: Increase mileage by 20k
         max_mileage = relaxed.get("max_mileage")
         if max_mileage:
-            new_mileage = max_mileage + 30000
+            new_mileage = max_mileage + 20000
             relaxed["max_mileage"] = new_mileage
             relaxations.append(f"Increased mileage limit to {new_mileage:,}")
 
     if level >= 5:
-        # Level 5: Expand to similar Toyota models
+        # Level 5: Expand to similar/substitute models (cross-brand)
         expanded = expand_models_with_substitutes(relaxed)
         if expanded.get("model") != relaxed.get("model"):
             relaxed = expanded
-            relaxations.append("Expanded to similar Toyota models")
+            relaxations.append("Expanded to similar models (including other brands)")
 
     if level >= 6:
-        # Level 6: Remove all features
+        # Level 6: Increase price by 15%
+        max_price = relaxed.get("max_price")
+        if max_price:
+            new_price = int(max_price * 1.15)
+            relaxed["max_price"] = new_price
+            relaxations.append(f"Increased budget to ${new_price:,}")
+
+    if level >= 7:
+        # Level 7: Remove drivetrain requirement
+        if relaxed.get("drivetrain"):
+            del relaxed["drivetrain"]
+            relaxations.append("Removed drivetrain requirement")
+
+    if level >= 8:
+        # Level 8: Expand year range further by ±2 years
+        if "min_year" in relaxed:
+            relaxed["min_year"] -= 2
+            relaxations.append(f"Further expanded min year to {relaxed['min_year']}")
+        if "max_year" in relaxed:
+            relaxed["max_year"] += 2
+            relaxations.append(f"Further expanded max year to {relaxed['max_year']}")
+
+    if level >= 9:
+        # Level 9: Remove all features
         if relaxed.get("features"):
             relaxed["features"] = []
             relaxations.append("Removed all feature requirements")
 
+    if level >= 10:
+        # Level 10: Increase price further by another 20%
+        max_price = relaxed.get("max_price")
+        if max_price:
+            new_price = int(max_price * 1.2)
+            relaxed["max_price"] = new_price
+            relaxations.append(f"Further increased budget to ${new_price:,}")
+
     return (relaxed, relaxations)
 
-def rank_listings(prefs: dict, limit: int = 10):
+def rank_listings(prefs: dict, limit: int = 25):
     """Rank listings with zero-match detection and constraint relaxation"""
     listings = load_listings()
     scored = []
@@ -763,8 +834,8 @@ def rank_listings(prefs: dict, limit: int = 10):
     if top_score < GOOD_MATCH_THRESHOLD:
         print(f"[rank_listings] Zero matches detected (top score: {top_score}). Trying constraint relaxation...", flush=True)
 
-        # Try progressive relaxation
-        for level in range(1, 7):
+        # Try progressive relaxation (up to 10 levels with larger database)
+        for level in range(1, 11):
             relaxed_prefs, relaxations = relax_constraints(prefs, level)
             print(f"[rank_listings] Relaxation level {level}: {relaxations}", flush=True)
 
@@ -784,7 +855,7 @@ def rank_listings(prefs: dict, limit: int = 10):
 
         # If still no good matches, return best available with all relaxations
         print(f"[rank_listings] No good matches even after full relaxation", flush=True)
-        _, final_relaxations = relax_constraints(prefs, 6)
+        _, final_relaxations = relax_constraints(prefs, 10)
         return format_results(scored, limit, final_relaxations)
 
     # Good matches found, return normally
@@ -794,7 +865,7 @@ def format_results(scored, limit, relaxations):
     """Format scored listings into result objects with diversity filter"""
     top = []
     seen_models = {}
-    MAX_PER_MODEL = 3
+    MAX_PER_MODEL = 5  # Increased from 3 to allow more variety with larger database
 
     for score, reasons, listing in scored:
         if len(top) >= limit:
@@ -803,7 +874,7 @@ def format_results(scored, limit, relaxations):
         vehicle = listing.get("vehicle", {})
         model = vehicle.get("model", "Unknown")
 
-        # Diversity filter: max 3 of same model
+        # Diversity filter: max 5 of same model
         if seen_models.get(model, 0) >= MAX_PER_MODEL:
             continue
 
@@ -826,7 +897,7 @@ def format_results(scored, limit, relaxations):
             "horsepower": vehicle.get("horsepower_hp"),
             "engine": vehicle.get("engine_type"),
             "features": features[:5],  # Top 5 features
-            "image_url": image_urls[0] if image_urls else None,
+            "image_urls": image_urls,  # Send all images for gallery
             "dealer_notes": listing.get("dealer_notes"),
             "score": score,
             "match_score_percent": score,
@@ -888,12 +959,12 @@ def check_inventory_availability(current_state: dict) -> dict:
     match_count = len(scored)
     print(f"[check_inventory] {match_count} good matches with current preferences", flush=True)
 
-    # Classify inventory status
-    if match_count >= 15:
+    # Classify inventory status (updated thresholds for larger database)
+    if match_count >= 30:
         status = "abundant"  # Plenty of options, can ask for more details
-    elif match_count >= 5:
+    elif match_count >= 15:
         status = "moderate"  # Some options, suggest showing results soon
-    elif match_count >= 1:
+    elif match_count >= 5:
         status = "limited"  # Very few options, stop asking for more details
     else:
         status = "none"  # No good matches, need to relax constraints
@@ -1177,6 +1248,7 @@ class PreferenceInput(BaseModel):
     text: str
     stage: Optional[str] = None
     zip: Optional[str] = None
+    state: Optional[dict] = None  # Allow frontend to override backend state
 
 
 @app.get("/")
@@ -1189,6 +1261,11 @@ def health():
 def update_preferences(payload: PreferenceInput):
     global state
     print(f"[preferences] stage={payload.stage} zip={payload.zip} text={payload.text!r}", flush=True)
+
+    # If frontend provides updated state, use it to sync backend state
+    if payload.state is not None:
+        print(f"[preferences] frontend provided state update: {payload.state!r}", flush=True)
+        state = payload.state
 
     if payload.stage == "zip":
         print("[preferences] resetting state for new zip", flush=True)

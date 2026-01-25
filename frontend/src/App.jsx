@@ -96,6 +96,23 @@ export default function App() {
     const newState = { ...backendState };
     delete newState[filterKey];
     setBackendState(newState);
+
+    // Re-rank with updated state if we're already showing results
+    if (showPanels && stage === "done") {
+      const response = await sendUserMessage({
+        text: "show_results",
+        stage: "done",
+        zip,
+        state: newState  // Pass updated state to backend
+      });
+
+      if (response?.results) {
+        setResults(response.results);
+      }
+      if (response?.state) {
+        setBackendState(response.state);
+      }
+    }
   };
 
   useEffect(() => {
@@ -255,7 +272,8 @@ export default function App() {
     const response = await sendUserMessage({
       text: "show_results",
       stage: "done",
-      zip
+      zip,
+      state: backendState  // Pass current state to ensure sync
     });
     if (response?.state) {
       setBackendState(response.state);

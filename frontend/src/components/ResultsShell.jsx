@@ -1,7 +1,24 @@
-import React from "react";
+import React, { useState } from "react";
 
 export default function ResultsShell({ results = [] }) {
+  // Track current image index for each result item
+  const [imageIndices, setImageIndices] = useState({});
+
   const hasRelaxations = results.length > 0 && results[0].relaxations && results[0].relaxations.length > 0;
+
+  const handlePrevImage = (itemIndex, imageCount) => {
+    setImageIndices(prev => ({
+      ...prev,
+      [itemIndex]: ((prev[itemIndex] || 0) - 1 + imageCount) % imageCount
+    }));
+  };
+
+  const handleNextImage = (itemIndex, imageCount) => {
+    setImageIndices(prev => ({
+      ...prev,
+      [itemIndex]: ((prev[itemIndex] || 0) + 1) % imageCount
+    }));
+  };
 
   return (
     <section className="future-panel">
@@ -42,12 +59,99 @@ export default function ResultsShell({ results = [] }) {
                 </div>
 
                 <div className="results-body">
-                  <div className="results-media">
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={`${item.year ?? ""} ${item.model ?? "Vehicle"}`} loading="lazy" />
-                    ) : (
-                      <div className="results-fallback">No image</div>
-                    )}
+                  <div className="results-media" style={{ position: "relative" }}>
+                    {(() => {
+                      const images = item.image_urls || [];
+                      const currentIndex = imageIndices[index] || 0;
+                      const currentImage = images[currentIndex];
+                      const hasMultipleImages = images.length > 1;
+
+                      return (
+                        <>
+                          {currentImage ? (
+                            <img src={currentImage} alt={`${item.year ?? ""} ${item.model ?? "Vehicle"}`} loading="lazy" />
+                          ) : (
+                            <div className="results-fallback">No image</div>
+                          )}
+
+                          {hasMultipleImages && (
+                            <>
+                              <button
+                                onClick={() => handlePrevImage(index, images.length)}
+                                style={{
+                                  position: "absolute",
+                                  left: "8px",
+                                  top: "50%",
+                                  transform: "translateY(-50%)",
+                                  background: "rgba(0, 0, 0, 0.6)",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "50%",
+                                  width: "36px",
+                                  height: "36px",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "20px",
+                                  fontWeight: "bold",
+                                  transition: "background 0.2s ease",
+                                  zIndex: 2
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0, 0, 0, 0.8)"}
+                                onMouseLeave={(e) => e.currentTarget.style.background = "rgba(0, 0, 0, 0.6)"}
+                                aria-label="Previous image"
+                              >
+                                ‹
+                              </button>
+                              <button
+                                onClick={() => handleNextImage(index, images.length)}
+                                style={{
+                                  position: "absolute",
+                                  right: "8px",
+                                  top: "50%",
+                                  transform: "translateY(-50%)",
+                                  background: "rgba(0, 0, 0, 0.6)",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "50%",
+                                  width: "36px",
+                                  height: "36px",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "20px",
+                                  fontWeight: "bold",
+                                  transition: "background 0.2s ease",
+                                  zIndex: 2
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0, 0, 0, 0.8)"}
+                                onMouseLeave={(e) => e.currentTarget.style.background = "rgba(0, 0, 0, 0.6)"}
+                                aria-label="Next image"
+                              >
+                                ›
+                              </button>
+                              <div style={{
+                                position: "absolute",
+                                bottom: "8px",
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                background: "rgba(0, 0, 0, 0.6)",
+                                color: "white",
+                                padding: "4px 12px",
+                                borderRadius: "12px",
+                                fontSize: "12px",
+                                fontWeight: "500",
+                                zIndex: 2
+                              }}>
+                                {currentIndex + 1} / {images.length}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   <div className="results-content">
