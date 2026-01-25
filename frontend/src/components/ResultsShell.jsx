@@ -168,6 +168,30 @@ export default function ResultsShell({ results = [] }) {
                           <strong>${item.price.toLocaleString()}</strong>
                         </div>
                       )}
+                      {item.monthly_payment !== undefined && (
+                        <div className="spec-item">
+                          {item.monthly_payment === 0 ? (
+                            <span style={{ fontStyle: "italic", color: "#666" }}>
+                              Down payment covers full price
+                            </span>
+                          ) : (
+                            <>
+                              <span style={{ fontWeight: "700", color: "var(--red)" }}>
+                                ${item.monthly_payment.toLocaleString()}/mo
+                              </span>
+                              {item.financing_info && (
+                                <div style={{
+                                  fontSize: "0.85em",
+                                  color: "#666",
+                                  marginTop: "2px"
+                                }}>
+                                  {item.financing_info.apr_percent}% APR · {item.financing_info.term_months} months · <span style={{ fontStyle: "italic" }}>Est.</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                       {item.mileage && (
                         <div className="spec-item">
                           <span>{item.mileage.toLocaleString()} miles</span>

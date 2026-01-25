@@ -17919,8 +17919,8 @@
         "transmission": "Automatic",
         "engine_type": "V-6 cyl",
         "engine_size": "3.4L",
-        "horsepower_hp": null,
-        "torque_lbft": 184
+        "horsepower_hp": 437,
+        "torque_lbft": 583
       },
       "highlighted_features_raw": [],
       "image_urls": [

@@ -5,11 +5,13 @@ export default function MessageList({ messages }) {
   const listRef = useRef(null);
 
   useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    requestAnimationFrame(() => {
-      list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
-    });
+    // Scroll to bottom when messages change
+    if (endRef.current) {
+      // Use setTimeout to ensure DOM has updated
+      setTimeout(() => {
+        endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }, 100);
+    }
   }, [messages]);
 
   return (

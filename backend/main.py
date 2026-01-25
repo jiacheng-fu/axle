@@ -41,6 +41,11 @@ Allowed keys:
 - interior_color (array of strings OR single string) - use array if user mentions multiple colors
 - drivetrain (string) - values: "AWD", "4WD", "FWD", "RWD", "All Wheel Drive", "Four Wheel Drive", "Front Wheel Drive", "Rear Wheel Drive"
 - features (array of strings)
+- payment_method (string) - values: "cash" or "finance"
+- down_payment (number) - dollars, only if financing
+- loan_term_months (number) - typically 36, 48, 60, or 72, only if financing
+- credit_score (number) - 300-850, only if financing
+- max_monthly_payment (number) - dollars, only if user specifies a strict monthly limit
 
 Rules:
 - Normalize brands and models to proper capitalization.
@@ -355,8 +360,80 @@ SCHEMA = {
     "horsepower": int,
     "interior_color": (str, list),  # Can be string or list
     "drivetrain": str,
-    "features": list
+    "features": list,
+    "payment_method": str,  # "cash" or "finance"
+    "down_payment": int,  # dollars
+    "loan_term_months": int,  # typically 36, 48, 60, 72
+    "credit_score": int,  # 300-850
+    "max_monthly_payment": int  # dollars
 }
+
+def estimate_apr(credit_score: int) -> float:
+    """Estimate APR based on credit score"""
+    if credit_score >= 750:
+        return 0.045  # 4.5% for excellent credit
+    elif credit_score >= 700:
+        return 0.065  # 6.5% for good credit
+    elif credit_score >= 650:
+        return 0.10   # 10% for fair credit
+    elif credit_score >= 600:
+        return 0.15   # 15% for poor credit
+    else:
+        return 0.215  # 21.5% for bad credit
+
+
+def calculate_monthly_payment(price: float, down_payment: float, apr: float, term_months: int) -> float:
+    """
+    Calculate monthly payment using standard loan formula.
+    M = P[r(1+r)^n]/[(1+r)^n-1]
+
+    Where:
+    - M = monthly payment
+    - P = principal (car price - down payment)
+    - r = monthly interest rate (APR/12)
+    - n = number of months
+    """
+    if term_months <= 0 or price <= down_payment:
+        return 0
+
+    principal = price - down_payment
+
+    if apr == 0:
+        # 0% APR (special financing)
+        return principal / term_months
+
+    monthly_rate = apr / 12
+    numerator = principal * monthly_rate * ((1 + monthly_rate) ** term_months)
+    denominator = ((1 + monthly_rate) ** term_months) - 1
+
+    return numerator / denominator
+
+
+def calculate_max_affordable_price(monthly_payment: float, down_payment: float, apr: float, term_months: int) -> float:
+    """
+    Calculate maximum affordable vehicle price given a monthly payment limit.
+    Works backwards from the loan payment formula.
+
+    P = M * [(1+r)^n-1] / [r(1+r)^n]
+
+    Then add down payment to get total price.
+    """
+    if term_months <= 0 or monthly_payment <= 0:
+        return down_payment
+
+    if apr == 0:
+        # 0% APR
+        principal = monthly_payment * term_months
+        return principal + down_payment
+
+    monthly_rate = apr / 12
+    denominator = monthly_rate * ((1 + monthly_rate) ** term_months)
+    numerator = ((1 + monthly_rate) ** term_months) - 1
+
+    principal = monthly_payment * (numerator / denominator)
+
+    return principal + down_payment
+
 
 def validate_zip(zip_code: str) -> dict:
     """Validate zip code and return nearby dealerships"""
@@ -818,6 +895,31 @@ def relax_constraints(prefs: dict, level: int) -> tuple:
 
 def rank_listings(prefs: dict, limit: int = 25):
     """Rank listings with zero-match detection and constraint relaxation"""
+    # Build financing parameters if user is financing
+    financing_params = None
+    if prefs.get("payment_method") == "finance":
+        down_payment = prefs.get("down_payment", 0)
+        loan_term = prefs.get("loan_term_months", 60)  # Default to 60 months if not specified
+        credit_score = prefs.get("credit_score", 700)  # Default to 700 if not specified
+        apr = estimate_apr(credit_score)
+
+        financing_params = {
+            "down_payment": down_payment,
+            "loan_term_months": loan_term,
+            "apr": apr,
+            "credit_score": credit_score
+        }
+
+        # If max_monthly_payment is specified, calculate max affordable price
+        if prefs.get("max_monthly_payment"):
+            max_monthly = prefs.get("max_monthly_payment")
+            max_price = calculate_max_affordable_price(max_monthly, down_payment, apr, loan_term)
+
+            print(f"[rank_listings] Financing mode: max_monthly=${max_monthly}, calculated max_price=${max_price:.2f}", flush=True)
+
+            # Override max_price constraint
+            prefs["max_price"] = int(max_price)
+
     listings = load_listings()
     scored = []
 
@@ -851,17 +953,17 @@ def rank_listings(prefs: dict, limit: int = 25):
             if top_score >= GOOD_MATCH_THRESHOLD:
                 print(f"[rank_listings] Found good matches at level {level} (score: {top_score})", flush=True)
                 # Return results with relaxation info
-                return format_results(scored, limit, relaxations)
+                return format_results(scored, limit, relaxations, financing_params)
 
         # If still no good matches, return best available with all relaxations
         print(f"[rank_listings] No good matches even after full relaxation", flush=True)
         _, final_relaxations = relax_constraints(prefs, 10)
-        return format_results(scored, limit, final_relaxations)
+        return format_results(scored, limit, final_relaxations, financing_params)
 
     # Good matches found, return normally
-    return format_results(scored, limit, [])
+    return format_results(scored, limit, [], financing_params)
 
-def format_results(scored, limit, relaxations):
+def format_results(scored, limit, relaxations, financing_params=None):
     """Format scored listings into result objects with diversity filter"""
     top = []
     seen_models = {}
@@ -883,7 +985,7 @@ def format_results(scored, limit, relaxations):
         image_urls = listing.get("image_urls", []) or []
         features = listing.get("highlighted_features_raw", []) or []
 
-        top.append({
+        result_item = {
             "year": vehicle.get("year"),
             "make": vehicle.get("make"),
             "model": model,
@@ -903,7 +1005,25 @@ def format_results(scored, limit, relaxations):
             "match_score_percent": score,
             "match_reasons": reasons,
             "relaxations": relaxations if relaxations else None
-        })
+        }
+
+        # Add monthly payment calculation if financing
+        if financing_params:
+            price = vehicle.get("price_usd")
+            if price:
+                down_payment = financing_params.get("down_payment", 0)
+                apr = financing_params.get("apr")
+                term_months = financing_params.get("loan_term_months")
+
+                monthly_payment = calculate_monthly_payment(price, down_payment, apr, term_months)
+                result_item["monthly_payment"] = round(monthly_payment, 2)
+                result_item["financing_info"] = {
+                    "down_payment": down_payment,
+                    "apr_percent": round(apr * 100, 2),
+                    "term_months": term_months
+                }
+
+        top.append(result_item)
 
     return top
 
@@ -1304,10 +1424,36 @@ def update_preferences(payload: PreferenceInput):
         return {"state": state, "bot_response": bot_response}
 
     if payload.stage == "done":
-        print(f"[preferences] done, state={state!r}", flush=True)
+        print(f"[preferences] done stage, state={state!r}", flush=True)
+
+        # Check if user is sending new preferences or just triggering results display
+        if payload.text and payload.text.strip().lower() != "show_results":
+            print(f"[preferences] extracting new preferences from text: {payload.text!r}", flush=True)
+            # User is updating preferences while viewing results
+            try:
+                update = extract_labels(payload.text)
+                print(f"[preferences] extracted update={update!r}", flush=True)
+
+                if update:  # Only update if we found new preferences
+                    state = merge_state(state, update)
+                    print(f"[preferences] merged state={state!r}", flush=True)
+            except Exception as e:
+                print(f"[preferences] extract_labels failed: {e}", flush=True)
+
+        # Re-rank with current (possibly updated) state
         results = rank_listings(state)
         print(f"[preferences] results_count={len(results)}", flush=True)
-        bot_response = f"Excellent! I've found {len(results)} great matches for you. Let me show you the best options that fit your preferences."
+
+        # Generate appropriate bot response
+        if payload.text and payload.text.strip().lower() != "show_results":
+            try:
+                bot_response = generate_bot_response(payload.text, state, "done")
+            except Exception as e:
+                print(f"[preferences] generate_bot_response failed: {e}", flush=True)
+                bot_response = f"Got it! I've updated your results. I found {len(results)} vehicles that match your preferences."
+        else:
+            bot_response = f"Excellent! I've found {len(results)} great matches for you. Let me show you the best options that fit your preferences."
+
         return {"state": state, "results": results, "bot_response": bot_response}
 
     try:
