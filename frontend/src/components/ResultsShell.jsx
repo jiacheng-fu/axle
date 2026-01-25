@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-export default function ResultsShell({ results = [] }) {
+export default function ResultsShell({ results = [], selectedCars = [], onToggleCompare }) {
   // Track current image index for each result item
   const [imageIndices, setImageIndices] = useState({});
 
@@ -236,6 +236,47 @@ export default function ResultsShell({ results = [] }) {
                           ))}
                         </ul>
                       </div>
+                    )}
+
+                    {item.source_url && (
+                      <div style={{ marginTop: "16px" }}>
+                        <a
+                          href={item.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "var(--red)",
+                            textDecoration: "none",
+                            fontSize: "0.95em",
+                            fontWeight: "600",
+                            display: "inline-block"
+                          }}
+                        >
+                          View Full Listing →
+                        </a>
+                      </div>
+                    )}
+
+                    {onToggleCompare && (
+                      <button
+                        className="btn-compare"
+                        onClick={() => onToggleCompare(item)}
+                        style={{
+                          marginTop: "16px",
+                          padding: "10px 20px",
+                          border: selectedCars.some(car => car.id === item.id) ? "2px solid var(--red)" : "2px solid #ddd",
+                          borderRadius: "6px",
+                          background: selectedCars.some(car => car.id === item.id) ? "var(--red)" : "white",
+                          color: selectedCars.some(car => car.id === item.id) ? "white" : "#333",
+                          cursor: "pointer",
+                          fontSize: "0.95em",
+                          fontWeight: "600",
+                          width: "100%",
+                          transition: "all 0.2s ease"
+                        }}
+                      >
+                        {selectedCars.some(car => car.id === item.id) ? "✓ Selected for Comparison" : "Compare"}
+                      </button>
                     )}
                   </div>
                 </div>

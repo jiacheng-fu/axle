@@ -3,7 +3,8 @@ import BrandHeader from "./components/BrandHeader.jsx";
 import MessageList from "./components/MessageList.jsx";
 import Composer from "./components/Composer.jsx";
 import ResultsShell from "./components/ResultsShell.jsx";
-import ComparisonShell from "./components/ComparisonShell.jsx";
+import ComparisonPanel from "./components/ComparisonPanel.jsx";
+import ComparisonInsightPanel from "./components/ComparisonInsightPanel.jsx";
 import { sendUserMessage } from "./api/client.js";
 
 const initialMessages = [
@@ -299,6 +300,9 @@ export default function App() {
   const [showFinancingForm, setShowFinancingForm] = useState(false);
   const [editingCreditScore, setEditingCreditScore] = useState(false);
   const [tempCreditScore, setTempCreditScore] = useState("");
+  const [selectedCars, setSelectedCars] = useState([]);
+  const [showComparison, setShowComparison] = useState(false);
+  const [showInsightPanel, setShowInsightPanel] = useState(false);
   const chatRailRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -420,6 +424,34 @@ export default function App() {
     }
   };
 
+  const handleToggleCompare = (car) => {
+    setSelectedCars((prev) => {
+      const isAlreadySelected = prev.some(c => c.id === car.id);
+
+      if (isAlreadySelected) {
+        // Remove car from selection
+        const newSelection = prev.filter(c => c.id !== car.id);
+        if (newSelection.length < 2) {
+          setShowComparison(false);
+        }
+        return newSelection;
+      } else {
+        // Add car to selection (max 2)
+        if (prev.length >= 2) {
+          alert("You can only compare 2 cars at a time. Please deselect one first.");
+          return prev;
+        }
+        const newSelection = [...prev, car];
+        if (newSelection.length === 2) {
+          setShowComparison(true);
+          // Close chat when comparison opens
+          setChatOpen(false);
+        }
+        return newSelection;
+      }
+    });
+  };
+
   const handleBackFromFinancing = () => {
     // Go back to payment method selection
     setShowFinancingForm(false);
@@ -436,6 +468,9 @@ export default function App() {
     if (!showPanels) return;
 
     const handleMouseMove = (event) => {
+      // Don't allow chat activation if comparison is open
+      if (showComparison) return;
+
       // Open chat when mouse is near left edge
       if (event.clientX <= 28 && !chatOpen) {
         setChatOpen(true);
@@ -452,7 +487,7 @@ export default function App() {
 
     window.addEventListener("mousemove", handleMouseMove);
     return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [showPanels, chatOpen]);
+  }, [showPanels, chatOpen, showComparison]);
 
   useEffect(() => {
     if (!showPanels || !chatOpen) return;
@@ -911,7 +946,21 @@ export default function App() {
               type="button"
               className={`chat-toggle ${chatOpen ? "chat-toggle-open" : ""}`}
               aria-label={chatOpen ? "Hide chat" : "Open chat"}
-              onClick={() => setChatOpen((open) => !open)}
+              onClick={() => {
+                setChatOpen((open) => {
+                  const newChatOpen = !open;
+                  // Close comparison when chat opens
+                  if (newChatOpen) {
+                    setShowComparison(false);
+                  }
+                  return newChatOpen;
+                });
+              }}
+              disabled={showComparison}
+              style={{
+                opacity: showComparison ? 0.5 : 1,
+                cursor: showComparison ? "not-allowed" : "pointer"
+              }}
             >
               <span className="chat-toggle-icon">...</span>
             </button>
@@ -919,11 +968,25 @@ export default function App() {
         </div>
         {showPanels && (
           <section className="results-stage">
-            <ResultsShell results={results} />
-            <ComparisonShell />
+            <ResultsShell
+              results={results}
+              selectedCars={selectedCars}
+              onToggleCompare={handleToggleCompare}
+            />
           </section>
         )}
       </main>
+      <ComparisonPanel
+        cars={selectedCars}
+        isOpen={showComparison}
+        onClose={() => setShowComparison(false)}
+        onOpenInsights={() => setShowInsightPanel(true)}
+      />
+      <ComparisonInsightPanel
+        cars={selectedCars}
+        isOpen={showInsightPanel}
+        onClose={() => setShowInsightPanel(false)}
+      />
     </div>
   );
 }

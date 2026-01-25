@@ -986,6 +986,8 @@ def format_results(scored, limit, relaxations, financing_params=None):
         features = listing.get("highlighted_features_raw", []) or []
 
         result_item = {
+            "id": listing.get("id"),
+            "source_url": listing.get("source_url"),
             "year": vehicle.get("year"),
             "make": vehicle.get("make"),
             "model": model,
@@ -998,9 +1000,17 @@ def format_results(scored, limit, relaxations, financing_params=None):
             "drivetrain": vehicle.get("drivetrain"),
             "horsepower": vehicle.get("horsepower_hp"),
             "engine": vehicle.get("engine_type"),
+            "transmission": vehicle.get("transmission"),
+            "fuel_type": vehicle.get("fuel_type"),
+            "mpg_city": vehicle.get("mpg_city"),
+            "mpg_highway": vehicle.get("mpg_highway"),
+            "seating_capacity": vehicle.get("seating_capacity"),
+            "torque_lbft": vehicle.get("torque_lbft"),
             "features": features[:5],  # Top 5 features
+            "all_features": features,  # All features for comparison
             "image_urls": image_urls,  # Send all images for gallery
             "dealer_notes": listing.get("dealer_notes"),
+            "spec_sections": listing.get("spec_sections"),
             "score": score,
             "match_score_percent": score,
             "match_reasons": reasons,
@@ -1474,3 +1484,169 @@ def update_preferences(payload: PreferenceInput):
         bot_response = "Got it! Is there anything else you'd like to add to help me find the perfect vehicle for you?"
 
     return {"state": state, "bot_response": bot_response}
+
+
+@app.post("/compare")
+def compare_vehicles(payload: dict):
+    """
+    Generate AI-powered comparison insight for two vehicles.
+    Analyzes specs, pricing, value, and provides recommendation.
+    """
+    car1 = payload.get("car1", {})
+    car2 = payload.get("car2", {})
+
+    print(f"[compare] Comparing {car1.get('year')} {car1.get('make')} {car1.get('model')} vs {car2.get('year')} {car2.get('make')} {car2.get('model')}", flush=True)
+
+    # Build detailed prompt for comparison
+    comparison_prompt = f"""You are an expert automotive analyst. Compare these two vehicles and provide a comprehensive analysis.
+
+Vehicle 1: {car1.get('year')} {car1.get('make')} {car1.get('model')} {car1.get('trim', '')}
+- Price: ${car1.get('price', 0):,}
+- Mileage: {car1.get('mileage', 0):,} miles
+- Drivetrain: {car1.get('drivetrain', 'N/A')}
+- Body Style: {car1.get('body_style', 'N/A')}
+- Horsepower: {car1.get('horsepower', 'N/A')} hp
+- Torque: {car1.get('torque_lbft', 'N/A')} lb-ft
+- Engine: {car1.get('engine', 'N/A')}
+- Transmission: {car1.get('transmission', 'N/A')}
+- Fuel Type: {car1.get('fuel_type', 'N/A')}
+- MPG: {car1.get('mpg_city', 'N/A')} city / {car1.get('mpg_highway', 'N/A')} highway
+- Seating: {car1.get('seating_capacity', 'N/A')} passengers
+- Exterior Color: {car1.get('exterior_color', 'N/A')}
+- Interior Color: {car1.get('interior_color', 'N/A')}
+
+Vehicle 2: {car2.get('year')} {car2.get('make')} {car2.get('model')} {car2.get('trim', '')}
+- Price: ${car2.get('price', 0):,}
+- Mileage: {car2.get('mileage', 0):,} miles
+- Drivetrain: {car2.get('drivetrain', 'N/A')}
+- Body Style: {car2.get('body_style', 'N/A')}
+- Horsepower: {car2.get('horsepower', 'N/A')} hp
+- Torque: {car2.get('torque_lbft', 'N/A')} lb-ft
+- Engine: {car2.get('engine', 'N/A')}
+- Transmission: {car2.get('transmission', 'N/A')}
+- Fuel Type: {car2.get('fuel_type', 'N/A')}
+- MPG: {car2.get('mpg_city', 'N/A')} city / {car2.get('mpg_highway', 'N/A')} highway
+- Seating: {car2.get('seating_capacity', 'N/A')} passengers
+- Exterior Color: {car2.get('exterior_color', 'N/A')}
+- Interior Color: {car2.get('interior_color', 'N/A')}
+
+Provide a CONCISE comparison in this format (keep it brief, use bullet points):
+
+**Value Analysis**
+- Quick comparison of price-to-value ratio
+- Note typical market values if relevant
+
+**Performance & Efficiency**
+- Key performance differences (power, mpg)
+
+**Best For**
+- 1-2 sentence recommendation for each buyer type
+
+Keep the entire response under 300 words. Be specific with numbers but avoid long paragraphs."""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an expert automotive analyst who provides CONCISE, data-driven vehicle comparisons. Keep responses brief and to the point using bullet points. Use actual market knowledge and reference sources like Kelley Blue Book when discussing values."},
+                {"role": "user", "content": comparison_prompt}
+            ],
+            temperature=0.7
+        )
+
+        insight = response.choices[0].message.content.strip()
+        print(f"[compare] Generated insight of {len(insight)} characters", flush=True)
+
+        return {"insight": insight}
+
+    except Exception as e:
+        print(f"[compare] Error generating insight: {e}", flush=True)
+        return {
+            "insight": "I apologize, but I'm unable to generate a detailed comparison at this time. However, based on the specs:\n\n" +
+                      f"Vehicle 1 ({car1.get('year')} {car1.get('model')}): ${car1.get('price', 0):,} with {car1.get('mileage', 0):,} miles\n" +
+                      f"Vehicle 2 ({car2.get('year')} {car2.get('model')}): ${car2.get('price', 0):,} with {car2.get('mileage', 0):,} miles\n\n" +
+                      "Consider factors like price-per-mile ratio, fuel efficiency, and your specific needs when making your decision."
+        }
+
+
+@app.post("/compare-chat")
+def compare_chat(payload: dict):
+    """
+    Answer questions about two specific vehicles being compared.
+    """
+    car1 = payload.get("car1", {})
+    car2 = payload.get("car2", {})
+    question = payload.get("question", "")
+    chat_history = payload.get("chat_history", [])
+
+    print(f"[compare-chat] Question: {question}", flush=True)
+
+    # Build context about both vehicles
+    context = f"""You are helping a user compare two vehicles. Answer their question accurately based on the vehicle specifications provided.
+
+Vehicle 1: {car1.get('year')} {car1.get('make')} {car1.get('model')} {car1.get('trim', '')}
+Full Specs:
+- Price: ${car1.get('price', 0):,}
+- Mileage: {car1.get('mileage', 0):,} miles
+- Drivetrain: {car1.get('drivetrain', 'N/A')}
+- Body Style: {car1.get('body_style', 'N/A')}
+- Horsepower: {car1.get('horsepower', 'N/A')} hp
+- Torque: {car1.get('torque_lbft', 'N/A')} lb-ft
+- Engine: {car1.get('engine', 'N/A')}
+- Transmission: {car1.get('transmission', 'N/A')}
+- Fuel Type: {car1.get('fuel_type', 'N/A')}
+- MPG: {car1.get('mpg_city', 'N/A')} city / {car1.get('mpg_highway', 'N/A')} highway
+- Seating: {car1.get('seating_capacity', 'N/A')} passengers
+- Colors: {car1.get('exterior_color', 'N/A')} exterior, {car1.get('interior_color', 'N/A')} interior
+- Features: {', '.join(car1.get('all_features', [])[:10]) if car1.get('all_features') else 'N/A'}
+
+Vehicle 2: {car2.get('year')} {car2.get('make')} {car2.get('model')} {car2.get('trim', '')}
+Full Specs:
+- Price: ${car2.get('price', 0):,}
+- Mileage: {car2.get('mileage', 0):,} miles
+- Drivetrain: {car2.get('drivetrain', 'N/A')}
+- Body Style: {car2.get('body_style', 'N/A')}
+- Horsepower: {car2.get('horsepower', 'N/A')} hp
+- Torque: {car2.get('torque_lbft', 'N/A')} lb-ft
+- Engine: {car2.get('engine', 'N/A')}
+- Transmission: {car2.get('transmission', 'N/A')}
+- Fuel Type: {car2.get('fuel_type', 'N/A')}
+- MPG: {car2.get('mpg_city', 'N/A')} city / {car2.get('mpg_highway', 'N/A')} highway
+- Seating: {car2.get('seating_capacity', 'N/A')} passengers
+- Colors: {car2.get('exterior_color', 'N/A')} exterior, {car2.get('interior_color', 'N/A')} interior
+- Features: {', '.join(car2.get('all_features', [])[:10]) if car2.get('all_features') else 'N/A'}
+
+Answer the user's question based on these specifications. Be specific and reference the actual data."""
+
+    try:
+        # Build message history
+        messages = [
+            {"role": "system", "content": context}
+        ]
+
+        # Add chat history
+        for msg in chat_history:
+            messages.append({
+                "role": "assistant" if msg["role"] == "bot" else "user",
+                "content": msg["text"]
+            })
+
+        # Add current question
+        messages.append({"role": "user", "content": question})
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            temperature=0.7
+        )
+
+        answer = response.choices[0].message.content.strip()
+        print(f"[compare-chat] Generated answer of {len(answer)} characters", flush=True)
+
+        return {"answer": answer}
+
+    except Exception as e:
+        print(f"[compare-chat] Error generating answer: {e}", flush=True)
+        return {
+            "answer": "I apologize, but I'm having trouble processing that question right now. Please try rephrasing or ask something else about these vehicles."
+        }
