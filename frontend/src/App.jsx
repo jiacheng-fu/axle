@@ -35,27 +35,84 @@ export default function App() {
   const inputRef = useRef(null);
 
   const canShowResults = useMemo(() => zip && prefCount > 0, [zip, prefCount]);
-  const summaryLines = useMemo(() => {
+
+  const formatLabel = (key) => {
+    const labelMap = {
+      zip: "Zip Code",
+      brand: "Brand",
+      model: "Model",
+      min_year: "Min Year",
+      max_year: "Max Year",
+      min_price: "Min Price",
+      max_price: "Max Price",
+      max_mileage: "Max Mileage",
+      exterior_color: "Exterior Color",
+      body_type: "Body Type",
+      seating_capacity: "Seating",
+      horsepower: "Horsepower",
+      interior_color: "Interior Color",
+      drivetrain: "Drivetrain",
+      features: "Features"
+    };
+    return labelMap[key] || key;
+  };
+
+  const formatValue = (value) => {
+    if (Array.isArray(value)) {
+      return value.join(", ");
+    }
+    if (typeof value === "number") {
+      return value.toLocaleString();
+    }
+    return value;
+  };
+
+  const summaryFilters = useMemo(() => {
     const entries = Object.entries(backendState);
     if (!entries.length) return [];
 
-    return entries.map(([key, value]) => {
-      if (Array.isArray(value)) {
-        return `${key}: ${value.join(", ") || "—"}`;
-      }
-      if (value === null || value === undefined || value === "") {
-        return `${key}: —`;
-      }
-      return `${key}: ${value}`;
-    });
+    const filtered = entries
+      .filter(([key, value]) => {
+        // Filter out dealership object and empty values
+        if (key === "dealership") return false;
+        if (value === null || value === undefined || value === "") return false;
+        if (Array.isArray(value) && value.length === 0) return false;
+        return true;
+      })
+      .map(([key, value]) => ({
+        key,
+        label: formatLabel(key),
+        value: formatValue(value),
+        displayValue: formatValue(value)
+      }));
+
+    console.log("[summaryFilters] backendState:", backendState);
+    console.log("[summaryFilters] filtered:", filtered);
+
+    return filtered;
   }, [backendState]);
 
+  const handleRemoveFilter = async (filterKey) => {
+    const newState = { ...backendState };
+    delete newState[filterKey];
+    setBackendState(newState);
+  };
+
   useEffect(() => {
-    if (!showPanels || chatOpen) return;
+    if (!showPanels) return;
 
     const handleMouseMove = (event) => {
-      if (event.clientX <= 28) {
+      // Open chat when mouse is near left edge
+      if (event.clientX <= 28 && !chatOpen) {
         setChatOpen(true);
+      }
+      // Close chat when mouse moves away from chat area
+      else if (chatOpen && chatRailRef.current) {
+        const chatRect = chatRailRef.current.getBoundingClientRect();
+        // Check if mouse is outside the chat area (with a small buffer)
+        if (event.clientX > chatRect.right + 20) {
+          setChatOpen(false);
+        }
       }
     };
 
@@ -258,12 +315,20 @@ export default function App() {
                 </div>
               </div>
             )}
-            {summaryLines.length ? (
-              <div className="summary-list">
-                {summaryLines.map((line) => (
-                  <span key={line} className="summary-item">
-                    {line}
-                  </span>
+            {summaryFilters.length ? (
+              <div className="summary-filters">
+                {summaryFilters.map((filter) => (
+                  <div key={filter.key} className="filter-badge">
+                    <span className="filter-label">{filter.label}:</span>
+                    <span className="filter-value">{filter.displayValue}</span>
+                    <button
+                      className="filter-remove"
+                      onClick={() => handleRemoveFilter(filter.key)}
+                      aria-label={`Remove ${filter.label} filter`}
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
               </div>
             ) : (

@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 import json
+import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, List
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup, Tag
+from dotenv import load_dotenv
+from openai import OpenAI
 
 MASTER_FILE = Path(__file__).parent / "carData.json"
 UA = (
@@ -16,10 +20,40 @@ UA = (
     "Chrome/120.0.0.0 Safari/537.36"
 )
 REQUEST_TIMEOUT_S = 30
+SCRAPE_TIMEOUT_SECONDS = 60  # Maximum time to spend scraping a single vehicle
+
+# Load environment variables and initialize OpenAI client for intelligent field inference
+load_dotenv()
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY")
+)
 
 
 def clean(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
+
+
+def normalize_drivetrain(drivetrain: Optional[str]) -> Optional[str]:
+    """
+    Normalize drivetrain to remove hyphens and standardize capitalization.
+
+    Examples:
+        "All-Wheel Drive" -> "All Wheel Drive"
+        "Rear-Wheel Drive" -> "Rear Wheel Drive"
+        "Front-Wheel Drive" -> "Front Wheel Drive"
+        "Four-Wheel Drive" -> "Four Wheel Drive"
+    """
+    if not drivetrain:
+        return None
+
+    # Remove hyphens
+    normalized = drivetrain.replace("-", " ").strip()
+
+    # Capitalize first letter of each word
+    normalized = " ".join(word.capitalize() for word in normalized.split())
+
+    return normalized
 
 
 def get_html_requests(url: str) -> str:
@@ -436,6 +470,177 @@ def parse_seating_capacity_from_spec_lines(lines: List[str]) -> Optional[int]:
     return None
 
 
+def normalize_color_with_llm(
+    technical_color: Optional[str],
+    make: Optional[str] = None,
+    model: Optional[str] = None,
+    year: Optional[int] = None
+) -> Optional[str]:
+    """
+    Use LLM to normalize technical/factory color names to common color names.
+
+    Args:
+        technical_color: The factory technical color name (e.g., "Blizzard Pearl", "Midnight Black Metallic")
+        make: Vehicle make for context (e.g., "Toyota")
+        model: Vehicle model for context (e.g., "Sequoia")
+        year: Vehicle year for context (e.g., 2013)
+
+    Returns:
+        Common color name (e.g., "White", "Black", "Silver") or None if input is None/empty
+    """
+    if not technical_color:
+        return None
+
+    # Build context string
+    context_parts = []
+    if year:
+        context_parts.append(str(year))
+    if make:
+        context_parts.append(make)
+    if model:
+        context_parts.append(model)
+
+    context = " ".join(context_parts) if context_parts else "vehicle"
+
+    prompt = f"""Given this factory/technical color name for a {context}: "{technical_color}"
+
+What is the actual common color that people would use when searching for this car?
+
+Respond with ONLY ONE of these standard colors (nothing else):
+- White
+- Black
+- Silver
+- Gray
+- Blue
+- Red
+- Green
+- Brown
+- Orange
+- Yellow
+- Purple
+- Gold
+- Tan
+- Beige
+
+Just output the color name, nothing else."""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=10
+        )
+
+        normalized = response.choices[0].message.content.strip()
+        print(f"[normalize_color_with_llm] '{technical_color}' ({context}) → '{normalized}'", flush=True)
+        return normalized
+    except Exception as e:
+        print(f"[normalize_color_with_llm] Error: {e}, returning original: '{technical_color}'", flush=True)
+        return technical_color
+
+
+def infer_missing_field_with_llm(
+    field_name: str,
+    vehicle_context: Dict[str, Any],
+    url: str
+) -> Optional[Any]:
+    """
+    Use LLM to intelligently infer a missing vehicle field based on available context.
+
+    Args:
+        field_name: The name of the missing field (e.g., "body_style", "seating_capacity")
+        vehicle_context: Dict with available vehicle info (make, model, year, trim, etc.)
+        url: Source URL for additional context
+
+    Returns:
+        Inferred value for the field, or None if unable to infer
+    """
+    # Build context string from available info
+    context_parts = []
+    for key in ["year", "make", "model", "trim"]:
+        if vehicle_context.get(key):
+            context_parts.append(str(vehicle_context[key]))
+
+    context = " ".join(context_parts) if context_parts else "unknown vehicle"
+
+    # Field-specific prompts
+    if field_name == "body_style":
+        prompt = f"""What is the body style of this vehicle: {context}?
+
+Respond with ONLY ONE of these body styles (nothing else):
+- Sedan
+- SUV
+- Truck
+- Coupe
+- Convertible
+- Hatchback
+- Wagon
+- Van
+- Minivan
+
+Just output the body style, nothing else."""
+        expected_type = str
+
+    elif field_name == "seating_capacity":
+        prompt = f"""What is the typical seating capacity (number of seats) for this vehicle: {context}?
+
+Respond with ONLY the number (e.g., 5, 7, 8), nothing else."""
+        expected_type = int
+
+    elif field_name == "year":
+        prompt = f"""Based on this vehicle URL: {url}
+
+What year is this vehicle? Extract the year from the URL or context.
+
+Respond with ONLY the 4-digit year (e.g., 2020), nothing else."""
+        expected_type = int
+
+    elif field_name == "make":
+        prompt = f"""Based on this vehicle URL: {url}
+
+What is the make/brand of this vehicle?
+
+Respond with ONLY the make name (e.g., Toyota, Honda, Ford), nothing else."""
+        expected_type = str
+
+    elif field_name == "model":
+        prompt = f"""Based on this vehicle context: {context}
+URL: {url}
+
+What is the model of this vehicle?
+
+Respond with ONLY the model name (e.g., Camry, Accord, F-150), nothing else."""
+        expected_type = str
+
+    else:
+        print(f"[infer_missing_field_with_llm] No LLM prompt defined for field: {field_name}", flush=True)
+        return None
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=20
+        )
+
+        result_str = response.choices[0].message.content.strip()
+
+        # Convert to expected type
+        if expected_type == int:
+            result = int(result_str)
+        else:
+            result = result_str
+
+        print(f"[infer_missing_field_with_llm] {field_name} for '{context}' → '{result}'", flush=True)
+        return result
+
+    except Exception as e:
+        print(f"[infer_missing_field_with_llm] Error inferring {field_name}: {e}", flush=True)
+        return None
+
+
 def scrape_vdp(url: str) -> dict:
     html = get_html_requests(url)
     soup = soup_from_html(html)
@@ -486,8 +691,11 @@ def scrape_vdp(url: str) -> dict:
             except Exception:
                 price_usd = None
 
-        exterior_color = clean(ddc_vehicle.get("exteriorColor")) if isinstance(ddc_vehicle.get("exteriorColor"), str) else None
-        interior_color = clean(ddc_vehicle.get("interiorColor")) if isinstance(ddc_vehicle.get("interiorColor"), str) else None
+        # Extract raw colors (will normalize later with vehicle context)
+        raw_exterior = clean(ddc_vehicle.get("exteriorColor")) if isinstance(ddc_vehicle.get("exteriorColor"), str) else None
+        raw_interior = clean(ddc_vehicle.get("interiorColor")) if isinstance(ddc_vehicle.get("interiorColor"), str) else None
+        exterior_color = raw_exterior
+        interior_color = raw_interior
 
         odo = ddc_vehicle.get("odometer") or ddc_vehicle.get("mileage") or ddc_vehicle.get("odometerReading")
         if odo is not None:
@@ -566,21 +774,69 @@ def scrape_vdp(url: str) -> dict:
         ds_lines = spec_sections.get("Detailed Specifications", [])
         seating_capacity = parse_seating_capacity_from_spec_lines(ds_lines)
 
-    # Enforce required fields
+    # Build vehicle context for LLM inference
+    vehicle_context = {
+        "year": year,
+        "make": make,
+        "model": model,
+        "trim": trim,
+        "vin": vin
+    }
+
+    # Use LLM to infer missing critical fields
+    if year is None:
+        print("\n⚠️  WARNING: year was not found in DDC payload or page heading. Using LLM to infer...", flush=True)
+        year = infer_missing_field_with_llm("year", vehicle_context, url)
+        vehicle_context["year"] = year
+
+    if not make:
+        print("\n⚠️  WARNING: make was not found in DDC payload or page heading. Using LLM to infer...", flush=True)
+        make = infer_missing_field_with_llm("make", vehicle_context, url)
+        vehicle_context["make"] = make
+
+    if not model:
+        print("\n⚠️  WARNING: model was not found in DDC payload or page heading. Using LLM to infer...", flush=True)
+        model = infer_missing_field_with_llm("model", vehicle_context, url)
+        vehicle_context["model"] = model
+
     if not body_style:
         if normal_body_style:
             body_style = normal_body_style
         else:
-            raise ValueError(
-                "body_style was not found in DDC payload. "
-                "This is required; check if the site changed its dataLayer keys."
-            )
+            print("\n⚠️  WARNING: body_style was not found in DDC payload. Using LLM to infer...", flush=True)
+            body_style = infer_missing_field_with_llm("body_style", vehicle_context, url)
 
     if seating_capacity is None:
-        raise ValueError(
-            "seating_capacity was not found (DDC payload missing and could not parse from Detailed Specifications). "
-            "This is required; check if the specs section format changed."
-        )
+        print("\n⚠️  WARNING: seating_capacity was not found in DDC payload or spec sections. Using LLM to infer...", flush=True)
+        seating_capacity = infer_missing_field_with_llm("seating_capacity", vehicle_context, url)
+
+    # Normalize colors using LLM with vehicle context
+    if exterior_color:
+        exterior_color = normalize_color_with_llm(exterior_color, make, model, year)
+    if interior_color:
+        interior_color = normalize_color_with_llm(interior_color, make, model, year)
+
+    # Normalize drivetrain to remove hyphens and standardize capitalization
+    drivetrain = normalize_drivetrain(drivetrain)
+
+    # Final validation - if critical fields are still None after LLM, raise error
+    if year is None:
+        raise ValueError("Could not determine vehicle year from scraping or LLM inference")
+    if not make:
+        raise ValueError("Could not determine vehicle make from scraping or LLM inference")
+    if not model:
+        raise ValueError("Could not determine vehicle model from scraping or LLM inference")
+    if not body_style:
+        raise ValueError("Could not determine vehicle body_style from scraping or LLM inference")
+    if seating_capacity is None:
+        raise ValueError("Could not determine seating_capacity from scraping or LLM inference")
+
+    # Price and mileage can be optional for now (user can filter them out later)
+    # But log warnings if missing
+    if price_usd is None:
+        print(f"\n⚠️  WARNING: price_usd is None for {year} {make} {model} - listing may be incomplete", flush=True)
+    if odometer_miles is None:
+        print(f"\n⚠️  WARNING: odometer_miles is None for {year} {make} {model} - listing may be incomplete", flush=True)
 
     listing_id = make_listing_id(url, vin, stock, vehicle_uuid)
 
@@ -621,20 +877,92 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) != 2:
-        print("Usage: python scrape_vdp.py <vehicle_detail_url>")
+        print("Usage: python scrape_vdp.py <vehicle_detail_url_or_file>")
+        print("Examples:")
+        print("  python scrape_vdp.py https://www.example.com/used/vehicle.htm")
+        print("  python scrape_vdp.py vdp_urls.txt")
         raise SystemExit(1)
 
-    url = sys.argv[1]
-    blob = scrape_vdp(url)
-    append_to_master(blob)
+    arg = sys.argv[1]
 
-    print(
-        f"Appended {blob['id']} to {MASTER_FILE.name} | "
-        f"highlights={len(blob.get('highlighted_features_raw', []))} | "
-        f"sections={len(blob.get('spec_sections', {}))} | "
-        f"dealer_notes={bool(blob.get('dealer_notes'))} | "
-        f"hp={blob.get('vehicle', {}).get('horsepower_hp')} "
-        f"tq={blob.get('vehicle', {}).get('torque_lbft')} | "
-        f"body_style={blob.get('vehicle', {}).get('body_style')} | "
-        f"seats={blob.get('vehicle', {}).get('seating_capacity')}"
-    )
+    # Check if argument is a file or URL
+    is_file = Path(arg).exists() and Path(arg).is_file()
+
+    if is_file:
+        # Batch mode: read URLs from file
+        print(f"[BATCH MODE] Reading URLs from {arg}", flush=True)
+        urls_file = Path(arg)
+
+        with urls_file.open("r", encoding="utf-8") as f:
+            urls = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+
+        total = len(urls)
+        print(f"[BATCH MODE] Found {total} URLs to scrape\n", flush=True)
+
+        success_count = 0
+        error_count = 0
+
+        for idx, url in enumerate(urls, 1):
+            print(f"\n{'='*80}", flush=True)
+            print(f"[{idx}/{total}] Processing: {url}", flush=True)
+            print(f"{'='*80}\n", flush=True)
+
+            try:
+                # Use ThreadPoolExecutor to enforce timeout
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(scrape_vdp, url)
+                    try:
+                        blob = future.result(timeout=SCRAPE_TIMEOUT_SECONDS)
+                        append_to_master(blob)
+
+                        print(
+                            f"\n[{idx}/{total}] SUCCESS: Appended {blob['id']} to {MASTER_FILE.name} | "
+                            f"highlights={len(blob.get('highlighted_features_raw', []))} | "
+                            f"sections={len(blob.get('spec_sections', {}))} | "
+                            f"dealer_notes={bool(blob.get('dealer_notes'))} | "
+                            f"hp={blob.get('vehicle', {}).get('horsepower_hp')} "
+                            f"tq={blob.get('vehicle', {}).get('torque_lbft')} | "
+                            f"body_style={blob.get('vehicle', {}).get('body_style')} | "
+                            f"seats={blob.get('vehicle', {}).get('seating_capacity')}",
+                            flush=True
+                        )
+                        success_count += 1
+
+                    except FuturesTimeoutError:
+                        print(f"\n[{idx}/{total}] TIMEOUT: Scraping exceeded {SCRAPE_TIMEOUT_SECONDS} seconds - skipping this vehicle", flush=True)
+                        error_count += 1
+                        # Continue to next URL
+
+            except Exception as e:
+                print(f"\n[{idx}/{total}] ERROR: Failed to scrape {url}", flush=True)
+                print(f"Error details: {str(e)}", flush=True)
+                error_count += 1
+                # Continue to next URL instead of stopping
+
+        # Print summary
+        print(f"\n{'='*80}", flush=True)
+        print(f"BATCH COMPLETE", flush=True)
+        print(f"{'='*80}", flush=True)
+        print(f"Total URLs: {total}", flush=True)
+        print(f"Successful: {success_count}", flush=True)
+        print(f"Failed: {error_count}", flush=True)
+        print(f"Output file: {MASTER_FILE}", flush=True)
+
+    else:
+        # Single URL mode
+        url = arg
+        print(f"[SINGLE MODE] Scraping: {url}\n", flush=True)
+
+        blob = scrape_vdp(url)
+        append_to_master(blob)
+
+        print(
+            f"\nAppended {blob['id']} to {MASTER_FILE.name} | "
+            f"highlights={len(blob.get('highlighted_features_raw', []))} | "
+            f"sections={len(blob.get('spec_sections', {}))} | "
+            f"dealer_notes={bool(blob.get('dealer_notes'))} | "
+            f"hp={blob.get('vehicle', {}).get('horsepower_hp')} "
+            f"tq={blob.get('vehicle', {}).get('torque_lbft')} | "
+            f"body_style={blob.get('vehicle', {}).get('body_style')} | "
+            f"seats={blob.get('vehicle', {}).get('seating_capacity')}"
+        )

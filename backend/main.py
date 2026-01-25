@@ -31,6 +31,7 @@ Allowed keys:
 - model (array of strings)
 - min_year (number)
 - max_year (number)
+- min_price (number)
 - max_price (number)
 - max_mileage (number)
 - exterior_color (array of strings OR single string) - use array if user mentions multiple colors like "red or silver"
@@ -306,6 +307,7 @@ SCHEMA = {
     "model": list,
     "min_year": int,
     "max_year": int,
+    "min_price": int,
     "max_price": int,
     "max_mileage": int,
     "exterior_color": (str, list),  # Can be string or list
@@ -440,7 +442,17 @@ def score_listing(listing: dict, prefs: dict) -> tuple:
         reasons.append(f"✓ Year: {year}")
 
     # Price constraint (CRITICAL - hard constraint)
+    min_price = prefs.get("min_price")
     max_price = prefs.get("max_price")
+
+    # Check minimum price first
+    if isinstance(min_price, int) and isinstance(price, (int, float)):
+        if price < min_price:
+            under_minimum = min_price - price
+            score -= 50  # CRITICAL penalty for below minimum
+            reasons.append(f"⚠ Below minimum price by ${int(under_minimum):,} (${int(price):,} vs min ${min_price:,})")
+
+    # Check maximum price
     if isinstance(max_price, int) and isinstance(price, (int, float)):
         if price <= max_price:
             # Bonus for being cheaper within budget
@@ -452,8 +464,8 @@ def score_listing(listing: dict, prefs: dict) -> tuple:
             over_budget = price - max_price
             score -= 50  # CRITICAL penalty for over budget
             reasons.append(f"⚠ Over budget by ${int(over_budget):,} (${int(price):,} vs ${max_price:,})")
-    elif isinstance(price, (int, float)):
-        # No price constraint
+    elif isinstance(price, (int, float)) and not min_price:
+        # No price constraint at all
         score += 5
 
     # Mileage constraint (IMPORTANT)
@@ -841,6 +853,17 @@ def extract_labels(user_text: str) -> dict:
 
     raw = response.choices[0].message.content.strip()
     print(f"[extract_labels] raw response={raw!r}", flush=True)
+
+    # Strip markdown code fences if present
+    if raw.startswith("```"):
+        # Remove opening fence
+        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+        # Remove closing fence
+        if raw.endswith("```"):
+            raw = raw.rsplit("\n```", 1)[0]
+        raw = raw.strip()
+        print(f"[extract_labels] stripped markdown, cleaned={raw!r}", flush=True)
+
     data = json.loads(raw)
     print(f"[extract_labels] parsed data={data!r}", flush=True)
 
@@ -891,8 +914,15 @@ def generate_bot_response(user_text: str, current_state: dict, stage: str) -> st
         context_parts.append(f"Brand preferences: {', '.join(current_state['brand'])}")
     if current_state.get("model"):
         context_parts.append(f"Model preferences: {', '.join(current_state['model'])}")
-    if current_state.get("max_price"):
-        context_parts.append(f"Budget: ${current_state['max_price']:,}")
+    if current_state.get("min_price") or current_state.get("max_price"):
+        min_p = current_state.get("min_price")
+        max_p = current_state.get("max_price")
+        if min_p and max_p:
+            context_parts.append(f"Budget: ${min_p:,} - ${max_p:,}")
+        elif max_p:
+            context_parts.append(f"Budget: Up to ${max_p:,}")
+        elif min_p:
+            context_parts.append(f"Budget: At least ${min_p:,}")
     if current_state.get("max_mileage"):
         context_parts.append(f"Max mileage: {current_state['max_mileage']:,}")
     if current_state.get("body_type"):
@@ -1205,8 +1235,9 @@ def update_preferences(payload: PreferenceInput):
 
     try:
         update = extract_labels(payload.text)
-    except Exception:
-        print("[preferences] extract_labels failed, returning empty update", flush=True)
+        print(f"[preferences] extracted update={update!r}", flush=True)
+    except Exception as e:
+        print(f"[preferences] extract_labels failed with error: {e}, returning empty update", flush=True)
         update = {}
 
     state = merge_state(state, update)
