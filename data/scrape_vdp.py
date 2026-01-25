@@ -375,20 +375,17 @@ def prune_spec_sections(spec_sections: Dict[str, Any]) -> Dict[str, List[str]]:
     return pruned
 
 
-# --- NEW: parse HP / torque from Detailed Specifications strings as fallback ---
 def parse_hp_torque_from_spec_lines(lines: List[str]) -> Tuple[Optional[int], Optional[int]]:
     hp = None
     tq = None
     for line in lines or []:
         s = clean(line)
 
-        # Horsepower: 181hp @ 5,800RPM  OR  Horsepower: 181 hp ...
         if hp is None and re.search(r"\bhorsepower\b", s, re.IGNORECASE):
             m = re.search(r"(\d{2,4})\s*hp\b", s, re.IGNORECASE)
             if m:
                 hp = int(m.group(1))
 
-        # Torque: 182 lb.-ft. @ 4,200RPM  OR  182 lb ft
         if tq is None and re.search(r"\btorque\b", s, re.IGNORECASE):
             m = re.search(r"(\d{2,4})\s*(lb\.?-?\s*ft|lb\s*ft|lb-ft|lb\.-ft\.)", s, re.IGNORECASE)
             if m:
@@ -397,6 +394,46 @@ def parse_hp_torque_from_spec_lines(lines: List[str]) -> Tuple[Optional[int], Op
         if hp is not None and tq is not None:
             break
     return hp, tq
+
+
+def extract_seating_capacity_from_vehicle_ddc(ddc_vehicle: Dict[str, Any]) -> Optional[int]:
+    """
+    Best-case: Dealer.com sometimes exposes a direct "maxSeatingCapacity"/"seatingCapacity" field.
+    Otherwise, return None and we fall back to parsing spec lines.
+    """
+    if not isinstance(ddc_vehicle, dict):
+        return None
+
+    # Common-ish key guesses across Dealer.com payloads
+    for k in ("maxSeatingCapacity", "seatingCapacity", "seats", "seatCount"):
+        v = ddc_vehicle.get(k)
+        if v is None:
+            continue
+        m = re.search(r"\d+", str(v))
+        if m:
+            n = int(m.group(0))
+            if 1 <= n <= 20:
+                return n
+    return None
+
+
+def parse_seating_capacity_from_spec_lines(lines: List[str]) -> Optional[int]:
+    """
+    Parse lines like:
+      - "Max seating capacity: 5"
+      - "Seating capacity: 7"
+      - "Max seating capacity: 7 passengers"
+    """
+    for line in lines or []:
+        s = clean(line)
+
+        if re.search(r"\b(max\s+seating\s+capacity|seating\s+capacity)\b", s, re.IGNORECASE):
+            m = re.search(r"(\d{1,2})", s)
+            if m:
+                n = int(m.group(1))
+                if 1 <= n <= 20:
+                    return n
+    return None
 
 
 def scrape_vdp(url: str) -> dict:
@@ -420,6 +457,13 @@ def scrape_vdp(url: str) -> dict:
     highlighted_features: List[str] = []
     image_urls: List[str] = []
     vehicle_uuid: Optional[str] = None
+
+    # Body style must be present
+    body_style: Optional[str] = None
+    normal_body_style: Optional[str] = None
+
+    # NEW: seating capacity (must be present)
+    seating_capacity: Optional[int] = None
 
     drivetrain: Optional[str] = None
     drive_type: Optional[str] = None
@@ -470,6 +514,14 @@ def scrape_vdp(url: str) -> dict:
             except Exception:
                 pass
 
+        if isinstance(ddc_vehicle.get("bodyStyle"), str):
+            body_style = clean(ddc_vehicle.get("bodyStyle"))
+        if isinstance(ddc_vehicle.get("normalBodyStyle"), str):
+            normal_body_style = clean(ddc_vehicle.get("normalBodyStyle"))
+
+        # Try seating directly from DDC if present (varies by site)
+        seating_capacity = extract_seating_capacity_from_vehicle_ddc(ddc_vehicle)
+
         drivetrain = clean(ddc_vehicle.get("driveLine")) if isinstance(ddc_vehicle.get("driveLine"), str) else None
         drive_type = clean(ddc_vehicle.get("driveType")) if isinstance(ddc_vehicle.get("driveType"), str) else None
         transmission = clean(ddc_vehicle.get("transmission")) if isinstance(ddc_vehicle.get("transmission"), str) else None
@@ -500,7 +552,7 @@ def scrape_vdp(url: str) -> dict:
     spec_sections_raw = scrape_sections_by_titles(soup)
     spec_sections = prune_spec_sections(spec_sections_raw)
 
-    # --- Fallback: fill horsepower/torque from Detailed Specifications ---
+    # Fill hp/torque from Detailed Specifications if missing
     if (horsepower_hp is None or torque_lbft is None):
         ds_lines = spec_sections.get("Detailed Specifications", [])
         hp2, tq2 = parse_hp_torque_from_spec_lines(ds_lines)
@@ -508,6 +560,27 @@ def scrape_vdp(url: str) -> dict:
             horsepower_hp = hp2
         if torque_lbft is None:
             torque_lbft = tq2
+
+    # Fill seating capacity from Detailed Specifications if missing
+    if seating_capacity is None:
+        ds_lines = spec_sections.get("Detailed Specifications", [])
+        seating_capacity = parse_seating_capacity_from_spec_lines(ds_lines)
+
+    # Enforce required fields
+    if not body_style:
+        if normal_body_style:
+            body_style = normal_body_style
+        else:
+            raise ValueError(
+                "body_style was not found in DDC payload. "
+                "This is required; check if the site changed its dataLayer keys."
+            )
+
+    if seating_capacity is None:
+        raise ValueError(
+            "seating_capacity was not found (DDC payload missing and could not parse from Detailed Specifications). "
+            "This is required; check if the specs section format changed."
+        )
 
     listing_id = make_listing_id(url, vin, stock, vehicle_uuid)
 
@@ -519,6 +592,9 @@ def scrape_vdp(url: str) -> dict:
             "year": year,
             "make": make,
             "model": model,
+            "body_style": body_style,
+            "normal_body_style": normal_body_style,
+            "seating_capacity": seating_capacity,
             "trim": trim,
             "vin": vin,
             "stock_number": stock,
@@ -538,14 +614,6 @@ def scrape_vdp(url: str) -> dict:
         "image_urls": image_urls,
         "dealer_notes": dealer_notes,
         "spec_sections": spec_sections,
-        "debug": {
-            "heading_used": heading,
-            "ddc_found": bool(ddc_vehicle),
-            "ddc_error": ddc_err,
-            "highlights_count": len(highlighted_features),
-            "sections_found": sorted(list(spec_sections.keys())),
-            "dealer_notes_found": bool(dealer_notes),
-        },
     }
 
 
@@ -562,9 +630,11 @@ if __name__ == "__main__":
 
     print(
         f"Appended {blob['id']} to {MASTER_FILE.name} | "
-        f"ddc_found={blob['debug']['ddc_found']} | "
-        f"highlights={blob['debug']['highlights_count']} | "
-        f"sections={len(blob['spec_sections'])} | "
-        f"dealer_notes={blob['debug']['dealer_notes_found']} | "
-        f"hp={blob['vehicle'].get('horsepower_hp')} tq={blob['vehicle'].get('torque_lbft')}"
+        f"highlights={len(blob.get('highlighted_features_raw', []))} | "
+        f"sections={len(blob.get('spec_sections', {}))} | "
+        f"dealer_notes={bool(blob.get('dealer_notes'))} | "
+        f"hp={blob.get('vehicle', {}).get('horsepower_hp')} "
+        f"tq={blob.get('vehicle', {}).get('torque_lbft')} | "
+        f"body_style={blob.get('vehicle', {}).get('body_style')} | "
+        f"seats={blob.get('vehicle', {}).get('seating_capacity')}"
     )
