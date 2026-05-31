@@ -1,0 +1,30 @@
+{
+  "_comment": "Offline fallback dealers, used when CARSCOUT_DATA_SOURCE=seed or when Auto.dev returns nothing. Real geography (city/state/zip geocoded at runtime via zip_centroids.csv); names/phones are demo placeholders except Bryan College Station Toyota (the real source of the bundled demo inventory). The default data source is Auto.dev.",
+  "dealers": [
+    { "id": "seed-bcs-toyota", "name": "Bryan College Station Toyota", "city": "Bryan", "state": "TX", "zip": "77802", "phone": "(979) 776-0404", "hours": "Mon-Sat 9:00 AM - 8:00 PM" },
+    { "id": "seed-nyc", "name": "Manhattan Auto Gallery", "city": "New York", "state": "NY", "zip": "10001", "phone": "(212) 555-0142", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-la", "name": "Westside Motors of LA", "city": "Los Angeles", "state": "CA", "zip": "90012", "phone": "(213) 555-0188", "hours": "Mon-Sun 9:00 AM - 8:00 PM" },
+    { "id": "seed-chicago", "name": "Lakeshore Pre-Owned", "city": "Chicago", "state": "IL", "zip": "60601", "phone": "(312) 555-0119", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-houston", "name": "Bayou City Auto Group", "city": "Houston", "state": "TX", "zip": "77002", "phone": "(713) 555-0173", "hours": "Mon-Sat 8:30 AM - 8:00 PM" },
+    { "id": "seed-phoenix", "name": "Desert Sun Automotive", "city": "Phoenix", "state": "AZ", "zip": "85004", "phone": "(602) 555-0150", "hours": "Mon-Sat 8:00 AM - 8:00 PM" },
+    { "id": "seed-philly", "name": "Liberty Auto Exchange", "city": "Philadelphia", "state": "PA", "zip": "19103", "phone": "(215) 555-0166", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-sanantonio", "name": "Alamo City Motors", "city": "San Antonio", "state": "TX", "zip": "78205", "phone": "(210) 555-0134", "hours": "Mon-Sat 9:00 AM - 8:00 PM" },
+    { "id": "seed-sandiego", "name": "Pacific Coast Auto", "city": "San Diego", "state": "CA", "zip": "92101", "phone": "(619) 555-0177", "hours": "Mon-Sun 9:00 AM - 8:00 PM" },
+    { "id": "seed-dallas", "name": "Trinity Auto Group", "city": "Dallas", "state": "TX", "zip": "75201", "phone": "(214) 555-0145", "hours": "Mon-Sat 8:30 AM - 8:00 PM" },
+    { "id": "seed-austin", "name": "Capital City Cars", "city": "Austin", "state": "TX", "zip": "78701", "phone": "(512) 555-0198", "hours": "Mon-Sat 9:00 AM - 8:00 PM" },
+    { "id": "seed-sanjose", "name": "Silicon Valley Auto", "city": "San Jose", "state": "CA", "zip": "95110", "phone": "(408) 555-0121", "hours": "Mon-Sun 9:00 AM - 7:00 PM" },
+    { "id": "seed-seattle", "name": "Emerald City Motors", "city": "Seattle", "state": "WA", "zip": "98101", "phone": "(206) 555-0159", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-denver", "name": "Mile High Auto Group", "city": "Denver", "state": "CO", "zip": "80202", "phone": "(303) 555-0182", "hours": "Mon-Sat 8:00 AM - 7:00 PM" },
+    { "id": "seed-boston", "name": "Bay State Pre-Owned", "city": "Boston", "state": "MA", "zip": "02108", "phone": "(617) 555-0107", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-atlanta", "name": "Peachtree Auto Center", "city": "Atlanta", "state": "GA", "zip": "30303", "phone": "(404) 555-0193", "hours": "Mon-Sat 9:00 AM - 8:00 PM" },
+    { "id": "seed-miami", "name": "Sunshine State Motors", "city": "Miami", "state": "FL", "zip": "33131", "phone": "(305) 555-0128", "hours": "Mon-Sun 9:00 AM - 8:00 PM" },
+    { "id": "seed-detroit", "name": "Motor City Auto Mart", "city": "Detroit", "state": "MI", "zip": "48226", "phone": "(313) 555-0164", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-minneapolis", "name": "North Star Automotive", "city": "Minneapolis", "state": "MN", "zip": "55401", "phone": "(612) 555-0136", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-portland", "name": "Rose City Auto", "city": "Portland", "state": "OR", "zip": "97201", "phone": "(503) 555-0171", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-vegas", "name": "Silver State Motors", "city": "Las Vegas", "state": "NV", "zip": "89101", "phone": "(702) 555-0115", "hours": "Mon-Sun 9:00 AM - 8:00 PM" },
+    { "id": "seed-nashville", "name": "Music City Auto Group", "city": "Nashville", "state": "TN", "zip": "37203", "phone": "(615) 555-0189", "hours": "Mon-Sat 9:00 AM - 8:00 PM" },
+    { "id": "seed-charlotte", "name": "Queen City Motors", "city": "Charlotte", "state": "NC", "zip": "28202", "phone": "(704) 555-0152", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-columbus", "name": "Buckeye Auto Center", "city": "Columbus", "state": "OH", "zip": "43215", "phone": "(614) 555-0140", "hours": "Mon-Sat 9:00 AM - 7:00 PM" },
+    { "id": "seed-kansascity", "name": "Heartland Auto Group", "city": "Kansas City", "state": "MO", "zip": "64106", "phone": "(816) 555-0125", "hours": "Mon-Sat 9:00 AM - 8:00 PM" }
+  ]
+}

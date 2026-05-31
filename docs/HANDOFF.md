@@ -96,6 +96,12 @@ Invoke via the Skill tool (or `/frontend-design`, etc.). If a skill still doesn'
 appear, check `~/.claude/skills/<name>/SKILL.md` has `name:`+`description:`
 frontmatter (verified at install time).
 
+## 5b. Deferred (intentionally not built yet)
+- **Hero landing page.** CarScout should open on a marketing **hero landing page**,
+  not drop straight into the tool. Deferred until **after Supabase + user accounts**
+  (so the landing page can include sign-in / saved searches). For now the app opens
+  directly on the map-based location picker (Step 1). Revisit in/after Phase 6.
+
 ## 6. Pointers
 - Architecture + phased plan: [docs/ROADMAP.md](ROADMAP.md).
 - Memory: `~/.claude/projects/.../memory/` (`carscout-project.md`,

@@ -4,7 +4,7 @@ uvicorn[standard]>=0.29
 openai>=1.30
 python-dotenv>=1.0
 pydantic>=2.6
+httpx>=0.27         # Auto.dev Vehicle Listings API client
 
 # Added in later phases:
 #   supabase>=2.4      (Phase 3 — Supabase data layer)
-#   httpx>=0.27        (Phase 3 — Auto.dev / NHTSA clients)

@@ -119,14 +119,14 @@ export default function ComparisonPanel({ cars, onClose, isOpen, onOpenInsights 
         flex: 1,
         padding: "40px",
         overflowY: "auto",
-        borderRight: carIndex === 0 ? "2px solid #ddd" : "none"
+        borderRight: carIndex === 0 ? "2px solid var(--line)" : "none"
       }}>
         <h3 style={{ marginTop: 0, fontSize: "1.5em", marginBottom: "24px" }}>
           {car.year} {car.make} {car.model}
           {car.trim && <span style={{
             marginLeft: "8px",
             fontSize: "0.8em",
-            background: "#f0f0f0",
+            background: "var(--paper-2)",
             padding: "4px 8px",
             borderRadius: "4px"
           }}>{car.trim}</span>}
@@ -143,19 +143,19 @@ export default function ComparisonPanel({ cars, onClose, isOpen, onOpenInsights 
                 height: "300px",
                 objectFit: "contain",
                 borderRadius: "8px",
-                background: "#f5f5f5"
+                background: "var(--paper-2)"
               }}
             />
           ) : (
             <div style={{
               width: "100%",
               height: "300px",
-              background: "#f0f0f0",
+              background: "var(--paper-2)",
               borderRadius: "8px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#999"
+              color: "var(--muted)"
             }}>
               No image
             </div>
@@ -229,7 +229,7 @@ export default function ComparisonPanel({ cars, onClose, isOpen, onOpenInsights 
             <div style={{ fontSize: "1.2em", color: "var(--red)", fontWeight: "600" }}>
               ${car.monthly_payment.toLocaleString()}/mo
               {car.financing_info && (
-                <span style={{ fontSize: "0.8em", color: "#666", fontWeight: "normal", marginLeft: "10px" }}>
+                <span style={{ fontSize: "0.8em", color: "var(--muted)", fontWeight: "normal", marginLeft: "10px" }}>
                   {car.financing_info.apr_percent}% APR · {car.financing_info.term_months} mo
                 </span>
               )}
@@ -344,31 +344,12 @@ export default function ComparisonPanel({ cars, onClose, isOpen, onOpenInsights 
           <div style={{
             marginTop: "24px",
             padding: "16px",
-            background: "#f9f9f9",
+            background: "var(--paper)",
             borderRadius: "8px",
             fontSize: "0.9em"
           }}>
             <strong style={{ display: "block", marginBottom: "8px", fontSize: "1em" }}>Dealer Notes:</strong>
             <div style={{ lineHeight: "1.6" }}>{car.dealer_notes}</div>
-          </div>
-        )}
-
-        {/* Source Link */}
-        {car.source_url && (
-          <div style={{ marginTop: "20px" }}>
-            <a
-              href={car.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: "var(--red)",
-                textDecoration: "none",
-                fontSize: "1em",
-                fontWeight: "600"
-              }}
-            >
-              View Full Listing →
-            </a>
           </div>
         )}
       </div>
@@ -384,7 +365,7 @@ export default function ComparisonPanel({ cars, onClose, isOpen, onOpenInsights 
       top: 0,
       width: "100%",
       height: "100vh",
-      background: "white",
+      background: "var(--paper)",
       transition: "right 0.3s ease-in-out",
       zIndex: 1000,
       display: "flex",
@@ -393,7 +374,7 @@ export default function ComparisonPanel({ cars, onClose, isOpen, onOpenInsights 
       {/* Header */}
       <div style={{
         padding: "20px",
-        borderBottom: "1px solid #ddd",
+        borderBottom: "1px solid var(--line)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",

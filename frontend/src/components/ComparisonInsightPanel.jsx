@@ -28,7 +28,7 @@ function SimpleMarkdown({ children }) {
       return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>');
+        .replace(/`(.*?)`/g, '<code style="background: var(--paper-2); padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>');
     };
 
     lines.forEach((line, index) => {
@@ -182,7 +182,7 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
       top: 0,
       width: "45%",
       height: "100vh",
-      background: "white",
+      background: "var(--paper)",
       transition: "right 0.3s ease-in-out",
       zIndex: 1001,
       display: "flex",
@@ -192,7 +192,7 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
       {/* Header */}
       <div style={{
         padding: "20px",
-        borderBottom: "1px solid #ddd",
+        borderBottom: "1px solid var(--line)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
@@ -223,13 +223,13 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
         maxHeight: "45vh",
         overflowY: "auto",
         padding: "32px",
-        borderBottom: "2px solid #ddd"
+        borderBottom: "2px solid var(--line)"
       }}>
         <h3 style={{
           marginTop: 0,
           marginBottom: "20px",
           fontSize: "1.2em",
-          color: "#333"
+          color: "var(--ink)"
         }}>
           Comparison Analysis
         </h3>
@@ -237,7 +237,7 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
           <div style={{
             textAlign: "center",
             padding: "40px",
-            color: "#666",
+            color: "var(--muted)",
             fontSize: "1em"
           }}>
             Loading AI insight...
@@ -246,7 +246,7 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
           <div style={{
             fontSize: "0.95em",
             lineHeight: "1.7",
-            color: "#333"
+            color: "var(--ink)"
           }}>
             <SimpleMarkdown>{aiInsight || "No insight available"}</SimpleMarkdown>
           </div>
@@ -258,25 +258,25 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
         flex: 1,
         display: "flex",
         flexDirection: "column",
-        background: "#f9f9f9",
+        background: "var(--paper)",
         minHeight: 0
       }}>
         <div style={{
           padding: "20px 32px 16px 32px",
-          borderBottom: "1px solid #ddd",
-          background: "white"
+          borderBottom: "1px solid var(--line)",
+          background: "var(--card)"
         }}>
           <h3 style={{
             margin: 0,
             fontSize: "1.1em",
-            color: "#333"
+            color: "var(--ink)"
           }}>
             Ask Questions
           </h3>
           <p style={{
             margin: "8px 0 0 0",
             fontSize: "0.85em",
-            color: "#666"
+            color: "var(--muted)"
           }}>
             Ask anything about these two vehicles
           </p>
@@ -293,7 +293,7 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
             <div style={{
               textAlign: "center",
               padding: "40px 20px",
-              color: "#999",
+              color: "var(--muted)",
               fontSize: "0.9em"
             }}>
               No messages yet. Ask a question about these cars!
@@ -306,22 +306,22 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
                   marginBottom: "16px",
                   padding: "14px 18px",
                   borderRadius: "8px",
-                  background: msg.role === "user" ? "#e3f2fd" : "white",
-                  border: msg.role === "bot" ? "1px solid #ddd" : "none"
+                  background: msg.role === "user" ? "var(--accent-soft)" : "var(--card)",
+                  border: msg.role === "bot" ? "1px solid var(--line)" : "1px solid var(--accent-line)"
                 }}
               >
                 <div style={{
                   fontWeight: "bold",
                   marginBottom: "6px",
                   fontSize: "0.85em",
-                  color: msg.role === "user" ? "#1976d2" : "var(--red)"
+                  color: msg.role === "user" ? "var(--ink)" : "var(--accent)"
                 }}>
                   {msg.role === "user" ? "You" : "AI"}
                 </div>
                 <div style={{
                   fontSize: "0.95em",
                   lineHeight: "1.6",
-                  color: "#333"
+                  color: "var(--ink)"
                 }}>
                   {msg.text}
                 </div>
@@ -333,9 +333,9 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
               marginBottom: "16px",
               padding: "14px 18px",
               borderRadius: "8px",
-              background: "white",
-              border: "1px solid #ddd",
-              color: "#666",
+              background: "var(--card)",
+              border: "1px solid var(--line)",
+              color: "var(--muted)",
               fontSize: "0.95em"
             }}>
               Thinking...
@@ -347,8 +347,8 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
         {/* Chat Input */}
         <div style={{
           padding: "20px 32px",
-          borderTop: "1px solid #ddd",
-          background: "white"
+          borderTop: "1px solid var(--line)",
+          background: "var(--card)"
         }}>
           <div style={{
             display: "flex",
@@ -363,7 +363,7 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
                 flex: 1,
                 padding: "12px 16px",
                 borderRadius: "6px",
-                border: "1px solid #ddd",
+                border: "1px solid var(--line)",
                 fontSize: "0.95em",
                 resize: "none",
                 fontFamily: "inherit",
@@ -393,7 +393,7 @@ export default function ComparisonInsightPanel({ cars, isOpen, onClose }) {
           <p style={{
             margin: "8px 0 0 0",
             fontSize: "0.75em",
-            color: "#999"
+            color: "var(--muted)"
           }}>
             Press Enter to send, Shift+Enter for new line
           </p>

@@ -8,15 +8,47 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel
 
-from repository import get_listings
+import geo
+from repository import (
+    MAX_RADIUS_MILES,
+    get_dealers_near,
+    get_listings_for_dealers,
+)
 
 # set up the semantic chatbot client
 load_dotenv()
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY")
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    default_headers={
+        # OpenRouter attribution headers (help with routing / free-tier access).
+        "HTTP-Referer": os.getenv("APP_URL", "http://localhost:5173"),
+        "X-Title": "CarScout",
+    },
 )
+
+# Two model tiers (override via env). FAST = a free model for casual/conversational
+# work; SMART = a paid, stronger model for tasks that need real reasoning/precision
+# (structured preference extraction, vehicle comparisons).
+MODEL_FAST = os.getenv("OPENROUTER_MODEL_FAST", "google/gemini-2.0-flash-001")
+MODEL_SMART = os.getenv("OPENROUTER_MODEL_SMART", "google/gemini-2.5-flash")
+
+
+def _chat(messages, model, **kwargs):
+    """Chat completion with a resilient fallback.
+
+    Free models are heavily rate-limited per-provider; if the requested model
+    fails (429/5xx/etc.) we retry once on the reliable SMART model so the user
+    still gets a contextual reply instead of a generic fallback.
+    """
+    try:
+        return client.chat.completions.create(model=model, messages=messages, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        if model != MODEL_SMART:
+            print(f"[llm] {model} failed ({exc}); retrying on {MODEL_SMART}", flush=True)
+            return client.chat.completions.create(model=MODEL_SMART, messages=messages, **kwargs)
+        raise
 
 SYSTEM_PROMPT = """
 You extract structured car preferences from a single user sentence.
@@ -268,21 +300,6 @@ FEATURE_ALIASES = {
     "air suspension": "adaptive suspension",
 }
 
-# Bryan/College Station area zip codes
-BRYAN_CSTAT_ZIPS = {
-    "77801", "77802", "77803", "77805", "77806", "77807", "77808",  # Bryan
-    "77840", "77841", "77842", "77843", "77844", "77845"             # College Station
-}
-
-# TODO(Phase 3/4): replace this single hardcoded dealership with real
-# zip-based dealer discovery (Google Places) + per-dealer inventory.
-DEALERSHIP_INFO = {
-    "name": "College Station Toyota",
-    "address": "1701 University Dr E, College Station, TX 77840",
-    "phone": "(979) 764-2886",
-    "hours": "Mon-Sat 9:00 AM - 8:00 PM"
-}
-
 SCHEMA = {
     "brand": list,
     "model": list,
@@ -373,44 +390,37 @@ def calculate_max_affordable_price(monthly_payment: float, down_payment: float, 
 
 
 def validate_zip(zip_code: str) -> dict:
-    """Validate zip code and return nearby dealerships"""
+    """Validate a US zip via real geocoding and return dealers within range.
+
+    Dealers come from Auto.dev (live) or the seed fallback — see repository.py.
+    We fetch within MAX_RADIUS_MILES; the frontend filters to the user's chosen
+    radius client-side.
+    """
     print(f"[validate_zip] input={zip_code!r}", flush=True)
 
-    # Strip whitespace and validate format
-    zip_clean = zip_code.strip()
-
-    # Check if it's a 5-digit number
-    if not zip_clean.isdigit() or len(zip_clean) != 5:
-        print(f"[validate_zip] invalid format", flush=True)
+    z = geo.normalize_zip(zip_code)
+    if not z or geo.lookup(z) is None:
+        print("[validate_zip] unknown/invalid US zip", flush=True)
         return {
             "valid": False,
-            "error": "Please enter a valid 5-digit zip code."
+            "error": "Please enter a valid 5-digit US zip code."
         }
 
-    # For all valid zips, return the College Station dealership
-    # (In a real app, this would search multiple dealerships by distance)
-    print(f"[validate_zip] valid zip, returning nearby dealerships", flush=True)
+    dealers = get_dealers_near(z, MAX_RADIUS_MILES)
+    print(f"[validate_zip] {z}: {len(dealers)} dealers within {MAX_RADIUS_MILES}mi", flush=True)
 
-    # Calculate mock distance based on zip
-    if zip_clean in BRYAN_CSTAT_ZIPS:
-        distance = "2.3 miles"
-    else:
-        # Mock distance for other zips (just for show)
-        distance = "45.7 miles"
-
-    dealership_with_distance = DEALERSHIP_INFO.copy()
-    dealership_with_distance["distance"] = distance
+    if not dealers:
+        return {
+            "valid": True,
+            "dealerships": [],
+            "message": f"I couldn't find dealers near {z}. Try a different zip."
+        }
 
     return {
         "valid": True,
-        "dealerships": [dealership_with_distance],  # Always return just one for demo
-        "message": f"I found 1 dealership near {zip_clean}."
+        "dealerships": dealers,
+        "message": f"I found {len(dealers)} dealership{'' if len(dealers) == 1 else 's'} near {z}."
     }
-
-def load_listings():
-    # Inventory data-access seam — static JSON today, Supabase in Phase 3.
-    # Callers don't change when the source does; see backend/repository.py.
-    return get_listings()
 
 def normalize_text(value: str) -> str:
     return value.strip().lower()
@@ -805,7 +815,7 @@ def relax_constraints(prefs: dict, level: int) -> tuple:
 
     return (relaxed, relaxations)
 
-def rank_listings(prefs: dict, limit: int = 25):
+def rank_listings(prefs: dict, listings: list, limit: int = 48):
     """Rank listings with zero-match detection and constraint relaxation"""
     # Build financing parameters if user is financing
     financing_params = None
@@ -832,7 +842,6 @@ def rank_listings(prefs: dict, limit: int = 25):
             # Override max_price constraint
             prefs["max_price"] = int(max_price)
 
-    listings = load_listings()
     scored = []
 
     for listing in listings:
@@ -879,7 +888,7 @@ def format_results(scored, limit, relaxations, financing_params=None):
     """Format scored listings into result objects with diversity filter"""
     top = []
     seen_models = {}
-    MAX_PER_MODEL = 5  # Increased from 3 to allow more variety with larger database
+    MAX_PER_MODEL = 12  # cap per model for variety, but high enough to fill 30-40+ results
 
     for score, reasons, listing in scored:
         if len(top) >= limit:
@@ -959,9 +968,10 @@ def extract_labels(user_text: str) -> dict:
 
     print("[extract_labels] sending request to model...", flush=True)
     response = client.chat.completions.create(
-        model="gpt-4o",  # Precise model for backend preference extraction
+        model=MODEL_SMART,  # reasoning/precision: structured preference extraction
         messages=messages,
-        temperature=0
+        temperature=0,
+        max_tokens=500
     )
 
     raw = response.choices[0].message.content.strip()
@@ -984,13 +994,12 @@ def extract_labels(user_text: str) -> dict:
     print(f"[extract_labels] cleaned={cleaned!r}", flush=True)
     return cleaned
 
-def check_inventory_availability(current_state: dict) -> dict:
+def check_inventory_availability(current_state: dict, listings: list) -> dict:
     """Check how many good matches exist with current preferences"""
     if not current_state:
         # No preferences yet, assume full inventory available
-        return {"match_count": 1000, "status": "abundant"}
+        return {"match_count": len(listings) or 1000, "status": "abundant"}
 
-    listings = load_listings()
     scored = []
 
     for listing in listings:
@@ -1013,12 +1022,12 @@ def check_inventory_availability(current_state: dict) -> dict:
 
     return {"match_count": match_count, "status": status}
 
-def generate_bot_response(user_text: str, current_state: dict, stage: str) -> str:
+def generate_bot_response(user_text: str, current_state: dict, stage: str, listings: list) -> str:
     """Generate contextual, inventory-aware bot response based on user input and current state"""
     print(f"[generate_bot_response] user_text={user_text!r}, stage={stage}, state={current_state!r}", flush=True)
 
     # Check inventory availability with current preferences
-    inventory_info = check_inventory_availability(current_state)
+    inventory_info = check_inventory_availability(current_state, listings)
     print(f"[generate_bot_response] inventory_info={inventory_info!r}", flush=True)
 
     # Build context about what we know so far
@@ -1144,10 +1153,11 @@ Output ONLY your response text. No preamble, no "Here's my response:", just the 
     ]
 
     print("[generate_bot_response] sending request to model...", flush=True)
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",  # Faster model for frontend chatbot responses
-        messages=messages,
-        temperature=0.7  # More creative for conversational responses
+    response = _chat(
+        messages,
+        MODEL_FAST,  # casual/conversational: free model, falls back to SMART if unavailable
+        temperature=0.7,  # More creative for conversational responses
+        max_tokens=300  # short reply; also avoids provider default-token caps
     )
 
     bot_text = response.choices[0].message.content.strip()
@@ -1294,12 +1304,39 @@ class PreferenceInput(BaseModel):
     stage: Optional[str] = None
     zip: Optional[str] = None
     state: Optional[dict] = None  # Allow frontend to override backend state
+    radius: Optional[int] = None  # chosen search radius (miles)
+    dealer_ids: Optional[list] = None  # dealers the user kept selected
 
 
 @app.get("/")
 def health():
     print("[health] ok", flush=True)
     return {"status": "ok"}
+
+
+@app.get("/dealers")
+def dealers(zip: str, radius: int = 50):
+    """Dealers within ``radius`` miles of ``zip`` (for the map-based location picker).
+
+    Returns the search origin (lat/lng) and dealer pins. Called on zip entry and
+    whenever the radius slider changes.
+    """
+    print(f"[dealers] zip={zip!r} radius={radius}", flush=True)
+    z = geo.normalize_zip(zip)
+    origin = geo.lookup(z) if z else None
+    if not z or origin is None:
+        return {"valid": False, "error": "Please enter a valid 5-digit US zip code."}
+
+    radius = max(1, min(int(radius or 50), MAX_RADIUS_MILES))
+    found = get_dealers_near(z, radius)
+    print(f"[dealers] {z} r={radius}: {len(found)} dealers", flush=True)
+    return {
+        "valid": True,
+        "zip": z,
+        "radius": radius,
+        "origin": {"lat": origin[0], "lng": origin[1]},
+        "dealers": found,
+    }
 
 
 @app.post("/preferences")
@@ -1329,24 +1366,18 @@ def update_preferences(payload: PreferenceInput):
 
         print(f"[preferences] state={state!r}", flush=True)
 
-        # Return dealership options for user to select
-        bot_response = f"{zip_validation['message']} Please select which dealership you'd like to search inventory from."
+        # Return dealer options; the client then asks for a search radius.
+        bot_response = f"{zip_validation['message']} Choose how far you'd like to search."
         return {
             "state": state,
             "bot_response": bot_response,
             "dealerships": zip_validation["dealerships"]
         }
 
-    if payload.stage == "select_dealership":
-        print(f"[preferences] dealership selected", flush=True)
-        # Store the selected dealership (for demo, we just store the only one)
-        state["dealership"] = DEALERSHIP_INFO
-
-        bot_response = f"Perfect! I'll search the inventory at {DEALERSHIP_INFO['name']}. Now, what kind of car are you looking for? Tell me about your budget, preferred features, or any specific models you have in mind."
-        return {"state": state, "bot_response": bot_response}
-
     if payload.stage == "done":
-        print(f"[preferences] done stage, state={state!r}", flush=True)
+        print(f"[preferences] done stage, dealer_ids={payload.dealer_ids!r}, state={state!r}", flush=True)
+
+        search_zip = payload.zip or state.get("zip")
 
         # Check if user is sending new preferences or just triggering results display
         if payload.text and payload.text.strip().lower() != "show_results":
@@ -1362,19 +1393,22 @@ def update_preferences(payload: PreferenceInput):
             except Exception as e:
                 print(f"[preferences] extract_labels failed: {e}", flush=True)
 
-        # Re-rank with current (possibly updated) state
-        results = rank_listings(state)
+        # Candidate pool = inventory from the dealers the user kept selected.
+        candidates = get_listings_for_dealers(
+            search_zip, payload.radius or MAX_RADIUS_MILES, payload.dealer_ids
+        )
+        print(f"[preferences] candidate listings={len(candidates)}", flush=True)
+
+        # Re-rank with current (possibly updated) state over those candidates
+        results = rank_listings(state, candidates)
         print(f"[preferences] results_count={len(results)}", flush=True)
 
-        # Generate appropriate bot response
+        # The results already show the closest (fuzzy) matches, so don't generate a
+        # salesy reply that second-guesses them — just acknowledge briefly.
         if payload.text and payload.text.strip().lower() != "show_results":
-            try:
-                bot_response = generate_bot_response(payload.text, state, "done")
-            except Exception as e:
-                print(f"[preferences] generate_bot_response failed: {e}", flush=True)
-                bot_response = f"Got it! I've updated your results. I found {len(results)} vehicles that match your preferences."
+            bot_response = "Done — I've re-ranked the matches for that. Let me know if you change your mind or if there's anything else I can help with."
         else:
-            bot_response = f"Excellent! I've found {len(results)} great matches for you. Let me show you the best options that fit your preferences."
+            bot_response = f"Showing {len(results)} vehicle{'' if len(results) == 1 else 's'} from your selected dealerships. Tell me what matters most and I'll rank them for you."
 
         return {"state": state, "results": results, "bot_response": bot_response}
 
@@ -1388,9 +1422,12 @@ def update_preferences(payload: PreferenceInput):
     state = merge_state(state, update)
     print(f"[preferences] state(final)={state!r}", flush=True)
 
-    # Generate contextual bot response
+    # Generate contextual bot response (over the selected dealers' inventory)
+    candidates = get_listings_for_dealers(
+        payload.zip or state.get("zip"), payload.radius or MAX_RADIUS_MILES, payload.dealer_ids
+    )
     try:
-        bot_response = generate_bot_response(payload.text, state, payload.stage or "prefs")
+        bot_response = generate_bot_response(payload.text, state, payload.stage or "prefs", candidates)
     except Exception as e:
         print(f"[preferences] generate_bot_response failed: {e}, using fallback", flush=True)
         bot_response = "Got it! Is there anything else you'd like to add to help me find the perfect vehicle for you?"
@@ -1458,12 +1495,13 @@ Keep the entire response under 300 words. Be specific with numbers but avoid lon
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=MODEL_SMART,
             messages=[
-                {"role": "system", "content": "You are an expert automotive analyst who provides CONCISE, data-driven vehicle comparisons. Keep responses brief and to the point using bullet points. Use actual market knowledge and reference sources like Kelley Blue Book when discussing values."},
+                {"role": "system", "content": "You are an expert automotive analyst who provides CONCISE vehicle comparisons. Use the listing specs provided AND your broad general knowledge of these specific vehicles (reliability, reputation, common problems, ownership costs, typical market value). NEVER refuse or say you don't have enough data — if a spec is missing from the listing, reason from what you know about that year/make/model/trim. Keep it brief with bullet points; reference market sources like KBB/Edmunds where useful."},
                 {"role": "user", "content": comparison_prompt}
             ],
-            temperature=0.7
+            temperature=0.7,
+            max_tokens=700
         )
 
         insight = response.choices[0].message.content.strip()
@@ -1528,7 +1566,7 @@ Full Specs:
 - Colors: {car2.get('exterior_color', 'N/A')} exterior, {car2.get('interior_color', 'N/A')} interior
 - Features: {', '.join(car2.get('all_features', [])[:10]) if car2.get('all_features') else 'N/A'}
 
-Answer the user's question based on these specifications. Be specific and reference the actual data."""
+Answer the user's question using these listing specs first. When the specs don't cover the question, USE YOUR GENERAL AUTOMOTIVE KNOWLEDGE of these specific vehicles (reliability, reviews, common issues, resale, real-world mpg, what they're like to own) to give a helpful, confident answer. NEVER reply that you lack data or that it isn't in the listing — always give your best informed answer, and only briefly note if you're reasoning beyond the listing. Be specific and conversational."""
 
     try:
         # Build message history
@@ -1547,9 +1585,10 @@ Answer the user's question based on these specifications. Be specific and refere
         messages.append({"role": "user", "content": question})
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=MODEL_SMART,
             messages=messages,
-            temperature=0.7
+            temperature=0.7,
+            max_tokens=700
         )
 
         answer = response.choices[0].message.content.strip()

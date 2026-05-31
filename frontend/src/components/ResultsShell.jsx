@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 
-export default function ResultsShell({ results = [], selectedCars = [], onToggleCompare }) {
+export default function ResultsShell({ results = [], selectedCars = [], onToggleCompare, hasPreferences = false, onToggleSave, isSaved, title }) {
   // Track current image index for each result item
   const [imageIndices, setImageIndices] = useState({});
 
-  const hasRelaxations = results.length > 0 && results[0].relaxations && results[0].relaxations.length > 0;
+  // Match scores / reasons / relaxations are only meaningful once the user has
+  // stated preferences. In pure browse mode this is just an inventory listing.
+  const hasRelaxations = hasPreferences && results.length > 0 && results[0].relaxations && results[0].relaxations.length > 0;
 
   const handlePrevImage = (itemIndex, imageCount) => {
     setImageIndices(prev => ({
@@ -22,20 +24,22 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
 
   return (
     <section className="future-panel">
-      <h2>Results {results.length > 0 && `(${results.length})`}</h2>
+      <h2>
+        {title || (hasPreferences ? "Top matches" : "Inventory")} {results.length > 0 && `(${results.length})`}
+      </h2>
 
       {hasRelaxations && (
         <div style={{
           padding: "12px 16px",
-          background: "rgba(255, 193, 7, 0.1)",
-          border: "1px solid rgba(255, 193, 7, 0.3)",
+          background: "rgba(176, 116, 16, 0.08)",
+          border: "1px solid rgba(176, 116, 16, 0.22)",
           borderRadius: "8px",
           marginBottom: "16px"
         }}>
-          <strong style={{ color: "#ffc107" }}>⚠ Constraints Relaxed</strong>
+          <strong style={{ color: "var(--amber)" }}>⚠ Constraints Relaxed</strong>
           <ul style={{ margin: "8px 0 0 0", paddingLeft: "20px", fontSize: "0.9em" }}>
             {results[0].relaxations.map((relaxation, i) => (
-              <li key={i} style={{ color: "#ffc107" }}>{relaxation}</li>
+              <li key={i} style={{ color: "var(--amber)" }}>{relaxation}</li>
             ))}
           </ul>
         </div>
@@ -49,12 +53,26 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
                 <div className="results-header">
                   <div className="results-rank-badge">
                     <span className="rank-number">#{index + 1}</span>
-                    <span className="match-score" style={{
-                      color: item.match_score_percent >= 75 ? "#4caf50" :
-                             item.match_score_percent >= 50 ? "#ffc107" : "#ff9800"
-                    }}>
-                      {item.match_score_percent}% match
-                    </span>
+                    {onToggleSave && (
+                      <button
+                        type="button"
+                        className={`heart-btn ${isSaved && isSaved(item) ? "is-saved" : ""}`}
+                        onClick={() => onToggleSave(item)}
+                        aria-pressed={isSaved ? isSaved(item) : false}
+                        aria-label={isSaved && isSaved(item) ? "Remove from saved" : "Save car"}
+                        title={isSaved && isSaved(item) ? "Saved — click to remove" : "Save car"}
+                      >
+                        {isSaved && isSaved(item) ? "♥" : "♡"}
+                      </button>
+                    )}
+                    {hasPreferences && item.match_score_percent !== undefined && (
+                      <span className="match-score" style={{
+                        color: item.match_score_percent >= 75 ? "var(--green)" :
+                               item.match_score_percent >= 50 ? "var(--amber)" : "var(--accent)"
+                      }}>
+                        {item.match_score_percent}% match
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -171,7 +189,7 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
                       {item.monthly_payment !== undefined && (
                         <div className="spec-item">
                           {item.monthly_payment === 0 ? (
-                            <span style={{ fontStyle: "italic", color: "#666" }}>
+                            <span style={{ fontStyle: "italic", color: "var(--muted)" }}>
                               Down payment covers full price
                             </span>
                           ) : (
@@ -182,7 +200,7 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
                               {item.financing_info && (
                                 <div style={{
                                   fontSize: "0.85em",
-                                  color: "#666",
+                                  color: "var(--muted)",
                                   marginTop: "2px"
                                 }}>
                                   {item.financing_info.apr_percent}% APR · {item.financing_info.term_months} months · <span style={{ fontStyle: "italic" }}>Est.</span>
@@ -225,7 +243,7 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
                       </div>
                     )}
 
-                    {item.match_reasons && item.match_reasons.length > 0 && (
+                    {hasPreferences && item.match_reasons && item.match_reasons.length > 0 && (
                       <div className="match-reasons">
                         <strong>Why this match:</strong>
                         <ul>
@@ -238,24 +256,6 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
                       </div>
                     )}
 
-                    {item.source_url && (
-                      <div style={{ marginTop: "16px" }}>
-                        <a
-                          href={item.source_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: "var(--red)",
-                            textDecoration: "none",
-                            fontSize: "0.95em",
-                            fontWeight: "600",
-                            display: "inline-block"
-                          }}
-                        >
-                          View Full Listing →
-                        </a>
-                      </div>
-                    )}
 
                     {onToggleCompare && (
                       <button
@@ -264,10 +264,10 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
                         style={{
                           marginTop: "16px",
                           padding: "10px 20px",
-                          border: selectedCars.some(car => car.id === item.id) ? "2px solid var(--red)" : "2px solid #ddd",
-                          borderRadius: "6px",
-                          background: selectedCars.some(car => car.id === item.id) ? "var(--red)" : "white",
-                          color: selectedCars.some(car => car.id === item.id) ? "white" : "#333",
+                          border: selectedCars.some(car => car.id === item.id) ? "1px solid var(--accent)" : "1px solid var(--line)",
+                          borderRadius: "999px",
+                          background: selectedCars.some(car => car.id === item.id) ? "var(--accent)" : "var(--card)",
+                          color: selectedCars.some(car => car.id === item.id) ? "#fdf6f0" : "var(--ink)",
                           cursor: "pointer",
                           fontSize: "0.95em",
                           fontWeight: "600",
@@ -287,7 +287,8 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
       ) : (
         <>
           <p>
-            Ranked car matches will appear here once you provide your preferences and click "Show Results".
+            Vehicles from your selected dealerships will appear here. Tell Scout what you're
+            looking for to rank them to your taste.
           </p>
           <div className="future-placeholder">
             <div className="placeholder-line" />

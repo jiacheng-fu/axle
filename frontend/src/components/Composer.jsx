@@ -1,14 +1,6 @@
 import React, { useCallback } from "react";
 
-export default function Composer({
-  value,
-  onChange,
-  onSend,
-  onShowResults,
-  canShowResults,
-  stage,
-  inputRef
-}) {
+export default function Composer({ value, onChange, onSend, stage, inputRef }) {
   const handleKeyDown = useCallback(
     (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
@@ -19,12 +11,12 @@ export default function Composer({
     [onSend]
   );
 
+  const isZip = stage === "zip";
+
   return (
     <div className="composer">
       <label className="composer-label" htmlFor="chat-input">
-        {stage === "zip"
-          ? "Enter your zip code"
-          : "Add a preference or feature"}
+        {isZip ? "Enter your zip code" : "Refine your search"}
       </label>
       <textarea
         id="chat-input"
@@ -34,27 +26,19 @@ export default function Composer({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={
-          stage === "zip"
-            ? "e.g. 77840"
-            : "e.g. Toyota, under $15k, Apple CarPlay, AWD"
+          isZip ? "e.g. 77840" : "e.g. Toyota SUV under $25k, AWD, Apple CarPlay, finance with $5k down"
         }
         rows={2}
       />
       <div className="composer-actions">
         <button className="btn-primary" type="button" onClick={onSend}>
-          Send
-        </button>
-        <button
-          className="btn-ghost"
-          type="button"
-          onClick={onShowResults}
-          disabled={!canShowResults}
-        >
-          Show me my results
+          {isZip ? "Search" : "Send"}
         </button>
       </div>
       <p className="composer-hint">
-        Press Enter to send. Shift + Enter for a new line.
+        {isZip
+          ? "Enter a 5-digit US zip to find dealers nearby."
+          : "Press Enter to send. Shift + Enter for a new line."}
       </p>
     </div>
   );
