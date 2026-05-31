@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel
 
+from repository import get_listings
+
 # set up the semantic chatbot client
 load_dotenv()
 
@@ -15,8 +17,6 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENROUTER_API_KEY")
 )
-
-DATA_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "carData.json"))
 
 SYSTEM_PROMPT = """
 You extract structured car preferences from a single user sentence.
@@ -268,77 +268,14 @@ FEATURE_ALIASES = {
     "air suspension": "adaptive suspension",
 }
 
-TOYOTA_SUBSTITUTES = {
-    # Sedans (by size/price tier) - Enhanced with cross-brand alternatives
-    "camry": ["avalon", "corolla", "camry hybrid", "accord", "altima", "malibu", "sonata"],
-    "corolla": ["camry", "prius", "corolla hybrid", "civic", "sentra", "elantra", "mazda3"],
-    "avalon": ["camry", "es 350", "accord", "maxima", "genesis g70"],
-    "prius": ["corolla hybrid", "camry hybrid", "corolla", "insight", "ioniq"],
-
-    # SUVs (by size) - Enhanced with cross-brand alternatives
-    "rav4": ["highlander", "4runner", "venza", "rav4 prime", "rav4 hybrid", "cr-v", "rogue", "cx-5", "tucson", "sportage"],
-    "highlander": ["4runner", "rav4", "sequoia", "venza", "pilot", "pathfinder", "cx-9", "palisade", "telluride"],
-    "4runner": ["highlander", "sequoia", "tacoma", "grand cherokee", "pathfinder", "bronco"],
-    "venza": ["rav4", "highlander", "rav4 hybrid"],
-    "sequoia": ["highlander", "4runner", "tundra", "expedition", "tahoe", "suburban", "yukon", "armada"],
-    "corolla cross": ["rav4", "corolla", "c-hr", "cr-v", "hrv", "trailblazer", "seltos"],
-    "c-hr": ["corolla", "rav4", "corolla cross", "hrv", "venue", "soul"],
-
-    # Trucks - Enhanced with cross-brand alternatives
-    "tacoma": ["tundra", "4runner", "colorado", "ranger", "frontier", "gladiator"],
-    "tundra": ["tacoma", "sequoia", "f-150", "silverado", "ram 1500", "titan"],
-
-    # Compact/Crossover
-    "yaris": ["corolla", "prius", "fit", "rio", "accent"],
-
-    # Minivans - Enhanced with cross-brand alternatives
-    "sienna": ["highlander", "sequoia", "odyssey", "pacifica", "carnival"],
-
-    # Hybrids/Electric
-    "rav4 prime": ["rav4 hybrid", "rav4", "highlander hybrid"],
-    "rav4 hybrid": ["rav4", "rav4 prime", "venza", "cr-v hybrid"],
-    "camry hybrid": ["camry", "avalon", "accord hybrid", "altima"],
-    "corolla hybrid": ["corolla", "prius", "prius prime", "insight"],
-    "highlander hybrid": ["highlander", "rav4 hybrid", "venza", "pilot"],
-    "prius prime": ["prius", "corolla hybrid", "ioniq plug-in"],
-
-    # Performance/Sports
-    "gr supra": ["86", "brz", "370z", "mustang"],
-    "86": ["gr supra", "brz", "miata"],
-
-    # Luxury (Lexus cross-references)
-    "es 350": ["avalon", "camry", "accord", "genesis g70"],
-    "rx 450h": ["highlander hybrid", "venza", "x5", "glc"],
-    "gx 460": ["4runner", "sequoia", "grand cherokee"],
-
-    # Cross-brand compact SUVs
-    "cr-v": ["rav4", "rogue", "cx-5", "tucson", "sportage", "escape"],
-    "rogue": ["rav4", "cr-v", "cx-5", "tucson", "escape"],
-    "cx-5": ["rav4", "cr-v", "rogue", "tucson", "sportage"],
-    "tucson": ["rav4", "cr-v", "rogue", "cx-5", "sportage"],
-    "escape": ["rav4", "cr-v", "rogue", "cx-5"],
-
-    # Cross-brand mid-size SUVs
-    "pilot": ["highlander", "pathfinder", "cx-9", "palisade", "telluride"],
-    "pathfinder": ["highlander", "pilot", "cx-9", "explorer"],
-    "palisade": ["highlander", "pilot", "telluride", "cx-9"],
-    "telluride": ["highlander", "palisade", "pilot", "cx-9"],
-
-    # Cross-brand sedans
-    "accord": ["camry", "altima", "malibu", "sonata", "mazda6"],
-    "civic": ["corolla", "sentra", "elantra", "mazda3"],
-    "altima": ["camry", "accord", "malibu", "sonata"],
-    "malibu": ["camry", "accord", "altima", "sonata"],
-    "sonata": ["camry", "accord", "altima", "malibu"],
-    "elantra": ["corolla", "civic", "sentra", "mazda3"],
-}
-
 # Bryan/College Station area zip codes
 BRYAN_CSTAT_ZIPS = {
     "77801", "77802", "77803", "77805", "77806", "77807", "77808",  # Bryan
     "77840", "77841", "77842", "77843", "77844", "77845"             # College Station
 }
 
+# TODO(Phase 3/4): replace this single hardcoded dealership with real
+# zip-based dealer discovery (Google Places) + per-dealer inventory.
 DEALERSHIP_INFO = {
     "name": "College Station Toyota",
     "address": "1701 University Dr E, College Station, TX 77840",
@@ -467,20 +404,13 @@ def validate_zip(zip_code: str) -> dict:
     return {
         "valid": True,
         "dealerships": [dealership_with_distance],  # Always return just one for demo
-        "message": f"I found 1 Toyota dealership near {zip_clean}."
+        "message": f"I found 1 dealership near {zip_clean}."
     }
 
 def load_listings():
-    if not os.path.exists(DATA_PATH):
-        print(f"[data] carData.json not found at {DATA_PATH}", flush=True)
-        return []
-    try:
-        with open(DATA_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("listings", [])
-    except Exception as exc:
-        print(f"[data] failed to load listings: {exc}", flush=True)
-        return []
+    # Inventory data-access seam — static JSON today, Supabase in Phase 3.
+    # Callers don't change when the source does; see backend/repository.py.
+    return get_listings()
 
 def normalize_text(value: str) -> str:
     return value.strip().lower()
@@ -790,24 +720,6 @@ def score_listing(listing: dict, prefs: dict) -> tuple:
 
     return (final_score, reasons)
 
-def expand_models_with_substitutes(prefs: dict) -> dict:
-    """Expand model preferences to include Toyota substitutes"""
-    expanded_prefs = prefs.copy()
-    original_models = prefs.get("model", [])
-
-    if not original_models:
-        return expanded_prefs
-
-    expanded_models = set(normalize_list(original_models))
-
-    for model in normalize_list(original_models):
-        if model in TOYOTA_SUBSTITUTES:
-            expanded_models.update(normalize_list(TOYOTA_SUBSTITUTES[model]))
-
-    expanded_prefs["model"] = list(expanded_models)
-    print(f"[expand_models] {original_models} → {list(expanded_models)}", flush=True)
-    return expanded_prefs
-
 def relax_constraints(prefs: dict, level: int) -> tuple:
     """Progressively relax constraints. Returns (relaxed_prefs, relaxations_applied)"""
     relaxed = prefs.copy()
@@ -848,11 +760,11 @@ def relax_constraints(prefs: dict, level: int) -> tuple:
             relaxations.append(f"Increased mileage limit to {new_mileage:,}")
 
     if level >= 5:
-        # Level 5: Expand to similar/substitute models (cross-brand)
-        expanded = expand_models_with_substitutes(relaxed)
-        if expanded.get("model") != relaxed.get("model"):
-            relaxed = expanded
-            relaxations.append("Expanded to similar models (including other brands)")
+        # Level 5: Drop the specific-model constraint (brand/model-agnostic)
+        if relaxed.get("model"):
+            relaxed = {**relaxed}
+            relaxed.pop("model", None)
+            relaxations.append("Broadened beyond specific models")
 
     if level >= 6:
         # Level 6: Increase price by 15%
@@ -1203,7 +1115,7 @@ You should:
 - Offer to show the closest matches available
 - Be encouraging, not discouraging"""
 
-    BOT_RESPONSE_PROMPT = f"""You are an expert Toyota car salesman having a friendly conversation with a customer.
+    BOT_RESPONSE_PROMPT = f"""You are an expert car salesman having a friendly conversation with a customer.
 
 User just said: "{user_text}"
 
@@ -1361,17 +1273,20 @@ def merge_state(state: dict, update: dict) -> dict:
     print(f"[merge_state] state(after)={state!r}", flush=True)
     return state
 
-app = FastAPI(title="Used Car Intelligence API")
+app = FastAPI(title="CarScout API")
+
+# CORS origins are configurable via ALLOWED_ORIGINS (comma-separated).
+# Defaults to "*" for local dev; lock down in production.
+_allowed = os.getenv("ALLOWED_ORIGINS")
+_origins = [o.strip() for o in _allowed.split(",") if o.strip()] if _allowed else ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-state = {}
 
 
 class PreferenceInput(BaseModel):
@@ -1389,13 +1304,10 @@ def health():
 
 @app.post("/preferences")
 def update_preferences(payload: PreferenceInput):
-    global state
+    # Stateless: the client owns conversation state and sends it on every call.
+    # (A module-global would leak across users and break on serverless.)
+    state = dict(payload.state) if payload.state else {}
     print(f"[preferences] stage={payload.stage} zip={payload.zip} text={payload.text!r}", flush=True)
-
-    # If frontend provides updated state, use it to sync backend state
-    if payload.state is not None:
-        print(f"[preferences] frontend provided state update: {payload.state!r}", flush=True)
-        state = payload.state
 
     if payload.stage == "zip":
         print("[preferences] resetting state for new zip", flush=True)
@@ -1430,7 +1342,7 @@ def update_preferences(payload: PreferenceInput):
         # Store the selected dealership (for demo, we just store the only one)
         state["dealership"] = DEALERSHIP_INFO
 
-        bot_response = f"Perfect! I'll search the inventory at {DEALERSHIP_INFO['name']}. Now, what kind of Toyota are you looking for? Tell me about your budget, preferred features, or any specific models you have in mind."
+        bot_response = f"Perfect! I'll search the inventory at {DEALERSHIP_INFO['name']}. Now, what kind of car are you looking for? Tell me about your budget, preferred features, or any specific models you have in mind."
         return {"state": state, "bot_response": bot_response}
 
     if payload.stage == "done":
