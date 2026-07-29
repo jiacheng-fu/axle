@@ -15,7 +15,7 @@ do the frontend rework.
 
 | Area | State |
 |---|---|
-| Repo | `LALALOLO123/CarScout` (public, own repo; `upstream` = original `jason-725/tamuhack26`). Local: `c:\Users\brian\OneDrive\Desktop\CarScout` |
+| Repo | `jiacheng-fu/CarScout` (public, own repo; `upstream` = original `jason-725/tamuhack26`). Local: `c:\Users\brian\OneDrive\Desktop\CarScout` |
 | Phase 0 (hygiene) | ✅ done — `requirements.txt`, `.env.example`s, README, `.gitignore` (+`__pycache__`), removed stale `copilot-instructions.md` |
 | Phase 1 (de-hardcode backend) | ✅ done — removed global `state` (now stateless), removed Toyota substitute table, added `backend/repository.py` seam, CORS via `ALLOWED_ORIGINS`. Compiles (`py_compile`); not runtime-tested |
 | Design skills | ✅ installed in `~/.claude/skills/` (need this restart to load) |
