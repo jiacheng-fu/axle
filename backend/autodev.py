@@ -21,6 +21,7 @@ import os
 import time
 
 import geo
+import dynamo_cache
 
 API_BASE = "https://api.auto.dev"
 _TTL_SECONDS = 900  # in-memory cache (per process)
@@ -259,11 +260,22 @@ def fetch_area(zip_code: str, distance_miles: int) -> list:
     if hit and (time.time() - hit[0]) < _TTL_SECONDS:
         return hit[1]
 
+    # Shared cache: survives cold starts and is visible to every instance, which
+    # the disk tier is not once this runs anywhere elastic. Checked before disk
+    # because it is the tier that stays correct in deployment.
+    shared = dynamo_cache.read(z, int(distance_miles))
+    if shared is not None:
+        print(f"[autodev] dynamo cache hit {z} d={distance_miles}: {len(shared)} listings (no API call)", flush=True)
+        _CACHE[cache_key] = (time.time(), shared)
+        return shared
+
     # Persistent cache: reuse a prior run's results — no API call.
     disk = _disk_read(z, int(distance_miles))
     if disk is not None:
         print(f"[autodev] disk cache hit {z} d={distance_miles}: {len(disk)} listings (no API call)", flush=True)
         _CACHE[cache_key] = (time.time(), disk)
+        # Promote to the shared tier so other instances stop paying for this call.
+        dynamo_cache.write(z, int(distance_miles), disk)
         return disk
 
     try:
@@ -308,6 +320,7 @@ def fetch_area(zip_code: str, distance_miles: int) -> list:
     _CACHE[cache_key] = (time.time(), out)
     if out:
         _disk_write(z, int(distance_miles), out)  # persist non-empty results only
+        dynamo_cache.write(z, int(distance_miles), out)  # shared tier, survives cold starts
     return out
 
 
