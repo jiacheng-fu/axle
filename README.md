@@ -1,5 +1,39 @@
 # CarScout
 
+## Live
+
+- App: https://d1j3m9qdbgs5ik.cloudfront.net
+- API: https://igvu6rprke.execute-api.us-east-1.amazonaws.com/prod
+
+### Architecture
+
+    CloudFront + S3 (React/Vite SPA)
+            |
+            v
+    API Gateway (HTTP API) -> Lambda (FastAPI via Mangum, python3.12, arm64)
+            |
+            +-- DynamoDB  carscout-listings-cache   shared listing cache, native TTL
+            +-- Supabase  auth + saved vehicles
+            +-- Auto.dev  live inventory (1,000 calls/month free tier)
+
+The listing cache is three tiers: in-process memory (900s) -> DynamoDB (shared,
+30d) -> local disk -> Auto.dev. On Lambda the disk tier lives in /tmp, which is
+per-instance and wiped on cold start; DynamoDB is what actually protects the
+monthly API quota across invocations.
+
+### Deploying
+
+    # API
+    pip install -r backend/requirements.txt --platform manylinux2014_aarch64         --implementation cp --python-version 3.12 --only-binary=:all: --target build_pkg
+    cp backend/*.py build_pkg/ && cp -r data build_pkg/data
+    sam deploy --stack-name carscout --resolve-s3 --capabilities CAPABILITY_IAM
+
+    # Frontend
+    cd frontend && npm run build
+    aws s3 sync dist/ s3://carscout-web-<account-id>/ --delete
+
+One-time table setup: `python backend/create_cache_table.py`
+
 AI-powered used-car shopping. Describe what you want in plain English, and
 CarScout finds, ranks, and compares real listings from nearby dealers.
 
