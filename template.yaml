@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CarScout API - FastAPI on Lambda behind API Gateway, with a DynamoDB listing cache.
+
+# Deploy:
+#   sam build && sam deploy --guided
+# The frontend then points VITE_API_BASE at the ApiUrl output.
+
+Parameters:
+  AutodevApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Auto.dev Vehicle Listings API key. Empty falls back to the seed data layer.
+  OpenRouterApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: OpenRouter key for the LLM pipeline.
+  AllowedOrigins:
+    Type: String
+    Default: 'http://localhost:5173'
+    Description: Comma-separated CORS origins. Add the Vercel URL once the frontend is deployed.
+  CacheTableName:
+    Type: String
+    Default: carscout-listings-cache
+
+Globals:
+  Function:
+    Runtime: python3.12
+    # 1024MB is not about memory: Lambda scales CPU with it, and the JSON
+    # normalisation over several pages of listings is CPU-bound. Lower settings
+    # made cold starts noticeably worse for no cost saving on the free tier.
+    MemorySize: 1024
+    Timeout: 30
+    Architectures: [arm64]          # cheaper per ms and no native deps here need x86
+
+Resources:
+  CarScoutApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins: ['*']         # FastAPI's own CORS middleware is the real gate
+        AllowHeaders: ['content-type', 'authorization']
+        AllowMethods: [GET, POST, OPTIONS]
+
+  CarScoutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: build_pkg/
+      Handler: lambda_handler.handler
+      Description: CarScout FastAPI application
+      Environment:
+        Variables:
+          AUTODEV_API_KEY: !Ref AutodevApiKey
+          OPENROUTER_API_KEY: !Ref OpenRouterApiKey
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CARSCOUT_DYNAMO_TABLE: !Ref CacheTableName
+          # AWS_REGION is injected by the Lambda runtime; setting it here is rejected.
+      Policies:
+        # Scoped to the one table rather than DynamoDBFullAccess.
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CacheTableName
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CarScoutApi
+            Path: /
+            Method: ANY
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CarScoutApi
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  ApiUrl:
+    Description: Base URL for the CarScout API. Set this as VITE_API_BASE.
+    Value: !Sub 'https://${CarScoutApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+  FunctionName:
+    Value: !Ref CarScoutFunction

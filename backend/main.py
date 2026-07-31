@@ -18,15 +18,38 @@ from repository import (
 # set up the semantic chatbot client
 load_dotenv()
 
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    default_headers={
-        # OpenRouter attribution headers (help with routing / free-tier access).
-        "HTTP-Referer": os.getenv("APP_URL", "http://localhost:5173"),
-        "X-Title": "CarScout",
-    },
-)
+# Built on first use rather than at import. The OpenAI SDK raises immediately when
+# no key is present, so constructing it here took down the whole module on any
+# environment without OPENROUTER_API_KEY set - including a fresh Lambda cold start,
+# where it failed during INIT and every request returned 500 before reaching a route.
+# Deferring it also means /dealers and the other non-LLM endpoints keep working when
+# the key is missing, which matches how autodev.is_enabled() already degrades.
+_client = None
+
+
+def _get_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            default_headers={
+                # OpenRouter attribution headers (help with routing / free-tier access).
+                "HTTP-Referer": os.getenv("APP_URL", "http://localhost:5173"),
+                "X-Title": "CarScout",
+            },
+        )
+    return _client
+
+
+class _LazyClient:
+    """Preserves the existing ``client.chat.completions...`` call sites."""
+
+    def __getattr__(self, name):
+        return getattr(_get_client(), name)
+
+
+client = _LazyClient()
 
 # Two model tiers (override via env). FAST = a free model for casual/conversational
 # work; SMART = a paid, stronger model for tasks that need real reasoning/precision

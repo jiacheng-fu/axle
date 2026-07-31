@@ -148,3 +148,8 @@ venv/
 
 # Cached API responses (Auto.dev disk cache)
 .cache/
+
+# Lambda build artifacts
+build_pkg/
+.aws-sam/
+samconfig.toml

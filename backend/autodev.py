@@ -32,7 +32,12 @@ _MAX_PAGES = int(os.getenv("AUTODEV_PAGES", "5"))  # pages to pull per area (dea
 # saved results and makes ZERO API calls (protects the free-tier monthly quota).
 # Long default TTL so re-recording a demo over days/weeks still hits the cache.
 # Delete backend/.cache/autodev/ to force fresh data.
-_CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache", "autodev")
+# On Lambda the whole filesystem is read-only except /tmp, so writing beside the
+# source would fail on every request. /tmp is also per-instance and wiped on cold
+# start, which is precisely why the DynamoDB tier above it exists.
+_ON_LAMBDA = bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+_CACHE_DIR = (os.path.join("/tmp", "autodev-cache") if _ON_LAMBDA
+              else os.path.join(os.path.dirname(__file__), ".cache", "autodev"))
 _DISK_TTL = int(os.getenv("AUTODEV_CACHE_TTL", str(30 * 24 * 3600)))  # 30 days
 
 # (zip, distance) -> (fetched_at, [normalized listing, ...])

@@ -10,9 +10,20 @@ import csv
 import math
 import os
 
-_CSV_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "data", "zip_centroids.csv")
-)
+# Resolved against several candidate roots. In the repo this file sits in backend/
+# and the data lives at ../data/, but the Lambda bundle flattens backend/ to the
+# package root, where ../data/ points outside the deployment package entirely.
+# Checking both keeps one code path for local and Lambda.
+def _find_csv() -> str:
+    here = os.path.dirname(__file__)
+    for rel in (("..", "data"), ("data",), (".",)):
+        cand = os.path.abspath(os.path.join(here, *rel, "zip_centroids.csv"))
+        if os.path.exists(cand):
+            return cand
+    return os.path.abspath(os.path.join(here, "..", "data", "zip_centroids.csv"))
+
+
+_CSV_PATH = _find_csv()
 
 # zip (5-digit str) -> (lat, lng)
 _CENTROIDS: dict[str, tuple[float, float]] = {}

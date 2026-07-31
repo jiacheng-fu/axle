@@ -29,7 +29,18 @@ DATA_SOURCE = os.getenv("CARSCOUT_DATA_SOURCE", "autodev").lower()
 # (not a fixed 250) concentrates listings in range -> plenty of in-radius cars.
 MAX_RADIUS_MILES = 250
 
-_DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+# Same resolution problem as geo.py: ../data/ is correct from backend/ in the repo
+# but points outside the bundle once Lambda flattens backend/ to the package root.
+def _find_data_dir() -> str:
+    here = os.path.dirname(__file__)
+    for rel in (("..", "data"), ("data",)):
+        cand = os.path.abspath(os.path.join(here, *rel))
+        if os.path.isdir(cand):
+            return cand
+    return os.path.abspath(os.path.join(here, "..", "data"))
+
+
+_DATA_DIR = _find_data_dir()
 _CARDATA_PATH = os.path.join(_DATA_DIR, "carData.json")
 _DEALERS_PATH = os.path.join(_DATA_DIR, "dealers.json")
 

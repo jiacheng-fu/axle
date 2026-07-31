@@ -9,3 +9,4 @@ httpx>=0.27         # Auto.dev Vehicle Listings API client
 # Added in later phases:
 #   supabase>=2.4      (Phase 3 — Supabase data layer)
 boto3>=1.34         # DynamoDB shared listing cache (optional; unset CARSCOUT_DYNAMO_TABLE to disable)
+mangum>=0.17        # ASGI adapter so the same app runs on Lambda (see lambda_handler.py)
