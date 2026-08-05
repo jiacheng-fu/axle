@@ -3,7 +3,6 @@
 ## Live
 
 - App: https://d1j3m9qdbgs5ik.cloudfront.net
-- API: https://igvu6rprke.execute-api.us-east-1.amazonaws.com/prod
 
 ### Architecture
 
