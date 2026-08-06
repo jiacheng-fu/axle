@@ -1,4 +1,4 @@
-# CarScout — Session Handoff (continue here after restart)
+# Axle (formerly CarScout, renamed 2026-08-06) — Session Handoff (continue here after restart)
 
 **Why this file exists:** we installed design skills into `~/.claude/skills/`, but
 Claude Code only loads skills at startup. This handoff lets a fresh post-restart

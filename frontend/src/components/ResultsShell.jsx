@@ -287,7 +287,7 @@ export default function ResultsShell({ results = [], selectedCars = [], onToggle
       ) : (
         <>
           <p>
-            Vehicles from your selected dealerships will appear here. Tell Scout what you're
+            Vehicles from your selected dealerships will appear here. Tell Axle what you're
             looking for to rank them to your taste.
           </p>
           <div className="future-placeholder">

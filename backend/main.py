@@ -36,7 +36,7 @@ def _get_client() -> OpenAI:
             default_headers={
                 # OpenRouter attribution headers (help with routing / free-tier access).
                 "HTTP-Referer": os.getenv("APP_URL", "http://localhost:5173"),
-                "X-Title": "CarScout",
+                "X-Title": "Axle",
             },
         )
     return _client
@@ -1306,7 +1306,7 @@ def merge_state(state: dict, update: dict) -> dict:
     print(f"[merge_state] state(after)={state!r}", flush=True)
     return state
 
-app = FastAPI(title="CarScout API")
+app = FastAPI(title="Axle API")
 
 # CORS origins are configurable via ALLOWED_ORIGINS (comma-separated).
 # Defaults to "*" for local dev; lock down in production.

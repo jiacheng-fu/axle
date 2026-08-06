@@ -171,7 +171,7 @@ def get_listings_for_dealers(zip_code: str, radius_miles: int = MAX_RADIUS_MILES
                              dealer_ids=None) -> list:
     """Candidate listings for the area, restricted to the selected dealers.
 
-    Returns CarScout-canonical listing dicts (``vehicle`` sub-dict, ``image_urls``,
+    Returns Axle-canonical listing dicts (``vehicle`` sub-dict, ``image_urls``,
     ``highlighted_features_raw``, ``_dealer`` …) ready for the scorer.
     """
     ids = set(dealer_ids or [])

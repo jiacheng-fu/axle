@@ -79,7 +79,7 @@ export default function LandingPage({ onEnter }) {
             <span className="step-num">2</span>
             <div>
               <strong>We do the legwork</strong>
-              <p>CarScout searches real dealer inventory near you and ranks it to what you actually said.</p>
+              <p>Axle searches real dealer inventory near you and ranks it to what you actually said.</p>
             </div>
           </li>
           <li>
@@ -100,7 +100,7 @@ export default function LandingPage({ onEnter }) {
             <br />
             <em>Just start talking.</em>
           </h2>
-          <p className="landing-closing-sub">CarScout does the digging — you pick the winner.</p>
+          <p className="landing-closing-sub">Axle does the digging — you pick the winner.</p>
           <button className="btn-google btn-google-lg" type="button" onClick={onEnter}>
             <GoogleG /> Sign in with Google
           </button>

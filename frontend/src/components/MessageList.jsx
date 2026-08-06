@@ -26,7 +26,7 @@ export default function MessageList({ messages }) {
         >
           <div className="message-inner">
             <span className="message-role">
-              {message.role === "bot" ? "Scout" : "You"}
+              {message.role === "bot" ? "Axle" : "You"}
             </span>
             <p>{message.text}</p>
           </div>

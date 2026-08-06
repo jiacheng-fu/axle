@@ -1,4 +1,4 @@
-# CarScout — Architecture & Deployment Roadmap
+# Axle (formerly CarScout) — Architecture & Deployment Roadmap
 
 From a hardcoded hackathon demo → a real, deployed, **nationwide, multi-dealer**
 product on a **$0 / free-tier** budget (Supabase + Vercel).

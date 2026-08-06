@@ -1,4 +1,6 @@
-# CarScout
+# Axle
+
+*Formerly CarScout — renamed August 2026.*
 
 ## Live
 

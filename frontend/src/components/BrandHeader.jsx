@@ -5,7 +5,7 @@ export default function BrandHeader() {
     <header className="hero">
       <span className="hero-badge">Your car salesman, online</span>
       <h1 className="hero-title">
-        Car<em>Scout</em>
+        Axle
       </h1>
       <p className="hero-subtitle">
         Tell us your zip code, then describe the car you want in plain words.

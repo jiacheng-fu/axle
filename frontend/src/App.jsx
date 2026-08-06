@@ -188,7 +188,7 @@ export default function App() {
   if (account.configured && !account.ready) {
     return (
       <div className="splash">
-        <span className="splash-mark">Car<em>Scout</em></span>
+        <span className="splash-mark">Axle</span>
       </div>
     );
   }
@@ -223,8 +223,8 @@ export default function App() {
           <section className="chat-card">
             <div className="chat-header">
               <div>
-                <h2>Chat with Scout</h2>
-                <p>Tell Scout what you want — it ranks the lot in real time.</p>
+                <h2>Chat with Axle</h2>
+                <p>Tell Axle what you want — it ranks the lot in real time.</p>
               </div>
               <div className="chat-status">
                 <span className="status-dot status-done" />

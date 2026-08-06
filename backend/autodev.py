@@ -156,7 +156,7 @@ def _coords(item) -> tuple[float, float] | None:
 
 
 def _normalize(item, origin: tuple[float, float] | None) -> dict | None:
-    """Map one Auto.dev listing into CarScout's canonical listing shape.
+    """Map one Auto.dev listing into Axle's canonical listing shape.
 
     Targets the real Auto.dev schema (vehicle.*, retailListing.*, location=[lng,lat]),
     with light fallbacks in case other listings vary.

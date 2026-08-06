@@ -1,4 +1,4 @@
-# CarScout — Supabase setup (accounts + saved cars)
+# Axle (formerly CarScout) — Supabase setup (accounts + saved cars)
 
 One-time setup so sign-in (Google) and saved/hearted cars work. ~10 minutes.
 
