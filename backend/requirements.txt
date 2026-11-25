@@ -1,4 +1,4 @@
-# CarScout backend (FastAPI) dependencies
+# Axle backend (FastAPI) dependencies
 fastapi>=0.110
 uvicorn[standard]>=0.29
 openai>=1.30

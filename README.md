@@ -1,6 +1,8 @@
 # Axle
 
-*Formerly CarScout — renamed August 2026.*
+*Formerly CarScout — renamed August 2026. Infrastructure names keep the old name
+(the `carscout` stack, `CARSCOUT_*` env vars, the `carscout-listings-cache` table,
+the `CarScoutApi`/`CarScoutFunction` resources) so the deployed resources stay intact.*
 
 ## Live
 
@@ -36,7 +38,7 @@ monthly API quota across invocations.
 One-time table setup: `python backend/create_cache_table.py`
 
 AI-powered used-car shopping. Describe what you want in plain English, and
-CarScout finds, ranks, and compares real listings from nearby dealers.
+Axle finds, ranks, and compares real listings from nearby dealers.
 
 > Originally a TAMUhack proof-of-concept (hardcoded to a single Toyota
 > dealership), now being rebuilt into a real, deployed, nationwide product.

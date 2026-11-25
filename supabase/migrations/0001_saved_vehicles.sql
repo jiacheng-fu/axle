@@ -1,4 +1,4 @@
--- CarScout — saved ("hearted") vehicles.
+-- Axle — saved ("hearted") vehicles.
 -- One row per (user, vehicle). `car` stores a snapshot of the listing so the
 -- saved list still renders and compares even if the live listing changes.
 -- Run this in the Supabase dashboard: SQL Editor -> New query -> paste -> Run.

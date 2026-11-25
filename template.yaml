@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: CarScout API - FastAPI on Lambda behind API Gateway, with a DynamoDB listing cache.
+Description: Axle API - FastAPI on Lambda behind API Gateway, with a DynamoDB listing cache.
 
 # Deploy:
 #   sam build && sam deploy --guided
@@ -50,7 +50,7 @@ Resources:
     Properties:
       CodeUri: build_pkg/
       Handler: lambda_handler.handler
-      Description: CarScout FastAPI application
+      Description: Axle FastAPI application
       Environment:
         Variables:
           AUTODEV_API_KEY: !Ref AutodevApiKey
@@ -78,7 +78,7 @@ Resources:
 
 Outputs:
   ApiUrl:
-    Description: Base URL for the CarScout API. Set this as VITE_API_BASE.
+    Description: Base URL for the Axle API. Set this as VITE_API_BASE.
     Value: !Sub 'https://${CarScoutApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
   FunctionName:
     Value: !Ref CarScoutFunction
