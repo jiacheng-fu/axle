@@ -40,8 +40,7 @@ One-time table setup: `python backend/create_cache_table.py`
 AI-powered used-car shopping. Describe what you want in plain English, and
 Axle finds, ranks, and compares real listings from nearby dealers.
 
-> Originally a TAMUhack proof-of-concept (hardcoded to a single Toyota
-> dealership), now being rebuilt into a real, deployed, nationwide product.
+> A personal project, deployed as a live nationwide product.
 > See **[docs/ROADMAP.md](docs/ROADMAP.md)** for the architecture and plan.
 
 ## How it works
