@@ -1,0 +1,5 @@
+# Axle MCP server. Local (demo-inventory) mode imports the backend, so it needs
+# the backend's dependencies too.
+-r ../backend/requirements.txt
+mcp>=2.3,<3
+pytest>=8
